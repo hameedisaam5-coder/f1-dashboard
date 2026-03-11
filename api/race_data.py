@@ -17,10 +17,53 @@ CACHE_DIR = "/tmp/fastf1_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 fastf1.Cache.enable_cache(CACHE_DIR)
 
-# ── Race configuration (change these for each race weekend) ─────────────────
-YEAR         = int(os.environ.get("F1_YEAR",    "2026"))
-RACE         = os.environ.get("F1_RACE",        "Australia")
-SESSION_TYPE = os.environ.get("F1_SESSION",     "R")
+# ── Race auto-detection ──────────────────────────────────────────────────────
+import datetime
+
+SESSION_TYPE = os.environ.get("F1_SESSION", "R")
+
+# Override for manual control (set in Vercel env vars to lock a specific race)
+_MANUAL_YEAR = os.environ.get("F1_YEAR")
+_MANUAL_RACE = os.environ.get("F1_RACE")
+
+def get_current_race():
+    """
+    Returns (year, round_name) for the active or most recent GP weekend.
+    Looks for a race whose event date is within the next 4 days or the past 7 days.
+    Falls back to the last round of the current year if nothing is nearby.
+    If F1_YEAR + F1_RACE env vars are set, uses those instead (manual override).
+    """
+    if _MANUAL_YEAR and _MANUAL_RACE:
+        return int(_MANUAL_YEAR), _MANUAL_RACE
+
+    today = datetime.date.today()
+    year  = today.year
+
+    try:
+        schedule = fastf1.get_event_schedule(year, include_testing=False)
+        # EventDate is the race Sunday; look for events ±7 days from today
+        for _, row in schedule.iterrows():
+            event_date = row["EventDate"]
+            if hasattr(event_date, "date"):
+                event_date = event_date.date()
+            delta = (event_date - today).days
+            if -7 <= delta <= 4:          # race week window
+                return year, row["EventName"]
+
+        # Nothing ongoing — fall back to the most recent past round
+        past = schedule[schedule["EventDate"].apply(
+            lambda d: (d.date() if hasattr(d, "date") else d) < today
+        )]
+        if not past.empty:
+            row = past.iloc[-1]
+            return year, row["EventName"]
+
+    except Exception as e:
+        print("Schedule lookup failed:", e)
+
+    # Last resort hard fallback
+    return 2026, "Australia"
+
 
 # ── Module-level cache (survives across warm invocations) ───────────────────
 _session        = None
@@ -28,7 +71,8 @@ _track_x        = []
 _track_y        = []
 _last_fetch     = 0
 _cached_json    = None
-CACHE_TTL_SECS  = 8   # re-fetch data at most every 8 s
+_loaded_race    = None      # tracks which race is currently loaded
+CACHE_TTL_SECS  = 8         # re-fetch data at most every 8 s
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -68,11 +112,22 @@ def is_retired(session, driver_number):
 
 # ── Core data fetch ─────────────────────────────────────────────────────────
 def build_race_data():
-    global _session, _track_x, _track_y
+    global _session, _track_x, _track_y, _loaded_race
+
+    year, race = get_current_race()
+    race_key   = f"{year}:{race}"
+
+    # Reset session if the race weekend has changed
+    if _loaded_race != race_key:
+        _session     = None
+        _track_x     = []
+        _track_y     = []
+        _loaded_race = race_key
+        print(f"Race changed to: {race_key}")
 
     # Load / refresh session
     if _session is None:
-        _session = fastf1.get_session(YEAR, RACE, SESSION_TYPE)
+        _session = fastf1.get_session(year, race, SESSION_TYPE)
         _session.load()
         # Build track layout once
         try:
