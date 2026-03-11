@@ -7,20 +7,21 @@
 <meta name="description" content="Near-live F1 strategy analysis dashboard.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',Arial,sans-serif;background:#08090d;color:#e8e8e8;padding:20px;min-height:100vh}
-.container{max-width:1300px;margin:auto;background:#0f1116;border-radius:14px;overflow:hidden;border:1px solid #1e2030;box-shadow:0 8px 40px rgba(0,0,0,.6)}
+body{font-family:'Titillium Web',Arial,sans-serif;background:#050505;color:#f3f4f6;padding:20px;min-height:100vh}
+.container{max-width:1300px;margin:auto;background:#101014;border-radius:8px;overflow:hidden;border:1px solid #2a2a35;box-shadow:0 12px 50px rgba(225,6,0,.08)}
 
 /* Header */
-.header{padding:16px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1e2030;background:linear-gradient(90deg,#0f1116,#151825)}
-.f1-badge{background:#e10600;color:#fff;font-weight:700;font-size:13px;padding:3px 9px;border-radius:4px;letter-spacing:1px}
-.header-left{display:flex;align-items:center;gap:12px}
-.header-title{font-size:19px;font-weight:700;color:#fff}
-.header-sub{font-size:11px;color:#6b7280;margin-top:2px}
-#lastUpdate{font-size:11px;color:#374151}
+.header{padding:20px 24px;display:flex;align-items:center;justify-content:center;border-bottom:3px solid #e10600;background:linear-gradient(135deg,#0a0a0f,#1a1a24);position:relative}
+.header-left{position:absolute;left:24px;display:flex;flex-direction:column;justify-content:center}
+.header-title{font-size:24px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:1px;font-style:italic;line-height:1}
+.header-sub{font-size:12px;color:#9ca3af;margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:1px}
+.header-logo{height:28px;}
+.header-right{position:absolute;right:24px;display:flex;align-items:center}
+#lastUpdate{font-size:12px;color:#9ca3af;font-weight:600;}
 
 /* Status */
 #raceStatus{padding:8px 20px;text-align:center;font-weight:600;font-size:13px;letter-spacing:.5px;transition:background .4s}
@@ -37,10 +38,10 @@ canvas#trackMap{display:block;margin:auto}
 .sector-dot{width:10px;height:10px;border-radius:2px}
 
 /* Tabs */
-.tabs{display:flex;border-bottom:1px solid #1e2030;background:#0b0c11}
-.tab-btn{padding:13px 28px;background:none;border:none;color:#6b7280;font-family:'Inter',Arial,sans-serif;font-size:14px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
-.tab-btn:hover{color:#d1d5db}
-.tab-btn.active{color:#fff;border-bottom-color:#e10600}
+.tabs{display:flex;border-bottom:1px solid #2a2a35;background:#0a0a0f}
+.tab-btn{padding:15px 28px;background:none;border:none;color:#888;font-family:'Titillium Web',Arial,sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;position:relative}
+.tab-btn:hover{color:#fff;background:rgba(255,255,255,.02)}
+.tab-btn.active{color:#fff;border-bottom-color:#e10600;background:linear-gradient(0deg, rgba(225,6,0,0.12) 0%, transparent 100%)}
 .tab-content{display:none}
 .tab-content.active{display:block}
 
@@ -67,10 +68,10 @@ canvas#trackMap{display:block;margin:auto}
 /* Live table */
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse}
-th{padding:10px 13px;color:#6b7280;text-align:left;border-bottom:1px solid #1e2030;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
-td{padding:12px 13px;border-bottom:1px solid #14161e;font-size:13px;white-space:nowrap}
-tr:hover td{background:rgba(255,255,255,.03)}
-.pos-num{font-weight:700;font-size:14px;color:#d1d5db}
+th{padding:12px 14px;color:#888;text-align:left;border-bottom:2px solid #2a2a35;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid #1a1a24;font-size:14px;font-weight:600;white-space:nowrap;color:#e8e8e8}
+tr:hover td{background:rgba(255,255,255,.04)}
+.pos-num{font-weight:700;font-size:16px;color:#fff}
 .driver-cell{display:flex;align-items:center;gap:9px}
 .team-bar{width:4px;height:23px;border-radius:3px;flex-shrink:0}
 .driver-code{font-weight:600;letter-spacing:.4px}
@@ -157,13 +158,13 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <!-- Header -->
 <div class="header">
   <div class="header-left">
-    <span class="f1-badge">F1</span>
-    <div>
-      <div class="header-title" id="headerTitle">Strategy Dashboard</div>
-      <div class="header-sub">Near-live · updates every 5s</div>
-    </div>
+    <div class="header-title" id="headerTitle">Strategy Dashboard</div>
+    <div class="header-sub">Near-live / 5s sync</div>
   </div>
-  <span id="lastUpdate"></span>
+  <img src="https://upload.wikimedia.org/wikipedia/commons/3/33/F1.svg" class="header-logo" alt="F1 Logo">
+  <div class="header-right">
+    <span id="lastUpdate"></span>
+  </div>
 </div>
 
 <!-- Status -->
