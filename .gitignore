@@ -1,0 +1,14 @@
+# FastF1 disk cache (large, auto-regenerated)
+cache/
+__pycache__/
+*.pyc
+
+# Generated data file (not needed in git — API generates it on-demand)
+race_data.json
+
+# Editor
+.vscode/
+
+# Python virtual envs
+venv/
+.env/

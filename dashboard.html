@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F1 Strategy Dashboard 2026</title>
+<meta name="description" content="Near-live F1 strategy analysis dashboard.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',Arial,sans-serif;background:#08090d;color:#e8e8e8;padding:20px;min-height:100vh}
+.container{max-width:1300px;margin:auto;background:#0f1116;border-radius:14px;overflow:hidden;border:1px solid #1e2030;box-shadow:0 8px 40px rgba(0,0,0,.6)}
+
+/* Header */
+.header{padding:16px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1e2030;background:linear-gradient(90deg,#0f1116,#151825)}
+.f1-badge{background:#e10600;color:#fff;font-weight:700;font-size:13px;padding:3px 9px;border-radius:4px;letter-spacing:1px}
+.header-left{display:flex;align-items:center;gap:12px}
+.header-title{font-size:19px;font-weight:700;color:#fff}
+.header-sub{font-size:11px;color:#6b7280;margin-top:2px}
+#lastUpdate{font-size:11px;color:#374151}
+
+/* Status */
+#raceStatus{padding:8px 20px;text-align:center;font-weight:600;font-size:13px;letter-spacing:.5px;transition:background .4s}
+.s-green{background:rgba(34,197,94,.12);color:#22c55e}
+.s-yellow{background:rgba(234,179,8,.15);color:#eab308}
+.s-orange{background:rgba(249,115,22,.15);color:#f97316}
+.s-red{background:rgba(239,68,68,.15);color:#ef4444}
+
+/* Track */
+.track-section{background:#0a0a14;padding:10px 0 4px;border-bottom:1px solid #1e2030}
+canvas#trackMap{display:block;margin:auto}
+.sector-legend{display:flex;justify-content:center;gap:22px;padding:5px 0 8px}
+.sector-legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:#9ca3af}
+.sector-dot{width:10px;height:10px;border-radius:2px}
+
+/* Tabs */
+.tabs{display:flex;border-bottom:1px solid #1e2030;background:#0b0c11}
+.tab-btn{padding:13px 28px;background:none;border:none;color:#6b7280;font-family:'Inter',Arial,sans-serif;font-size:14px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.tab-btn:hover{color:#d1d5db}
+.tab-btn.active{color:#fff;border-bottom-color:#e10600}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* Section headings */
+.section-head{padding:14px 20px 8px;font-size:12px;font-weight:600;color:#6b7280;letter-spacing:.8px;text-transform:uppercase;border-bottom:1px solid #1e2030}
+
+/* Guide tab */
+.guide-wrap{padding:24px 28px;max-width:900px}
+.guide-section{margin-bottom:36px}
+.guide-section-title{font-size:15px;font-weight:700;color:#e8e8e8;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.guide-section-sub{font-size:12px;color:#6b7280;margin-bottom:14px}
+.guide-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:8px}
+.guide-card{background:#131520;border:1px solid #1e2030;border-radius:10px;padding:14px 16px}
+.guide-card-term{font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;display:flex;align-items:center;gap:7px}
+.guide-card-def{font-size:12px;color:#9ca3af;line-height:1.6}
+.guide-pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;margin-right:4px;margin-bottom:2px}
+.guide-col-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:2px}
+.guide-col-table th{padding:7px 10px;color:#6b7280;text-align:left;border-bottom:1px solid #1e2030;font-size:11px;font-weight:600;text-transform:uppercase}
+.guide-col-table td{padding:8px 10px;border-bottom:1px solid #131520;color:#d1d5db;vertical-align:top}
+.guide-col-table td:first-child{color:#fff;font-weight:600;white-space:nowrap;width:120px}
+.guide-col-table tr:last-child td{border-bottom:none}
+.guide-divider{border:none;border-top:1px solid #1e2030;margin:28px 0}
+
+/* Live table */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{padding:10px 13px;color:#6b7280;text-align:left;border-bottom:1px solid #1e2030;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+td{padding:12px 13px;border-bottom:1px solid #14161e;font-size:13px;white-space:nowrap}
+tr:hover td{background:rgba(255,255,255,.03)}
+.pos-num{font-weight:700;font-size:14px;color:#d1d5db}
+.driver-cell{display:flex;align-items:center;gap:9px}
+.team-bar{width:4px;height:23px;border-radius:3px;flex-shrink:0}
+.driver-code{font-weight:600;letter-spacing:.4px}
+.tyre{padding:2px 9px;border-radius:5px;font-size:11px;font-weight:700;color:#111;letter-spacing:.3px}
+.soft{background:#ff3333}.medium{background:#ffdd00}.hard{background:#e8e8e8}
+.inter{background:#39b54a}.wet{background:#0067ff;color:#fff}
+.gap-val{font-variant-numeric:tabular-nums;font-size:12px;color:#9ca3af}
+.pos-chg{font-size:12px;font-weight:600}
+.pos-up{color:#22c55e}.pos-dn{color:#ef4444}.pos-eq{color:#4b5563}
+.trendBox{display:flex;flex-direction:column;align-items:center;gap:2px}
+.lapTime{font-size:9px;color:#6b7280;font-variant-numeric:tabular-nums}
+.deg-badge{font-size:11px;font-variant-numeric:tabular-nums;font-weight:500}
+.row-dnf td{opacity:.5;background:rgba(239,68,68,.04)}
+.dnf-badge{background:#7f1d1d;color:#fca5a5;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.dnf-sep td{padding:5px 13px;font-size:11px;color:#4b5563;font-weight:600;letter-spacing:.8px;text-transform:uppercase;background:#0b0c11;border-top:1px solid #1e2030;border-bottom:1px solid #1e2030}
+
+/* Pit window cards */
+.pit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;padding:16px}
+.pit-card{background:#13151f;border:1px solid #1e2030;border-radius:10px;padding:13px;transition:border-color .2s}
+.pc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.pc-name{font-weight:700;font-size:14px;letter-spacing:.4px}
+.pc-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.4px}
+.pc-tyre{font-size:11px;color:#9ca3af;margin-bottom:6px}
+.pc-bar-bg{background:#1e2030;border-radius:4px;height:6px;overflow:hidden;margin-bottom:7px}
+.pc-bar-fg{height:100%;border-radius:4px;transition:width .5s}
+.pc-status{font-size:12px;font-weight:600}
+.pc-laps{font-size:11px;color:#6b7280;margin-top:3px}
+/* window statuses */
+.w-fresh{border-color:#1d4ed8}.w-fresh .pc-badge{background:#1e3a8a;color:#93c5fd}
+.w-opening{border-color:#92400e}.w-opening .pc-badge{background:#78350f;color:#fcd34d}
+.w-pit{border-color:#14532d}.w-pit .pc-badge{background:#166534;color:#86efac}
+.w-overdue{border-color:#7f1d1d;animation:pulse-border .8s infinite alternate}.w-overdue .pc-badge{background:#7f1d1d;color:#fca5a5}
+@keyframes pulse-border{from{border-color:#7f1d1d}to{border-color:#ef4444}}
+
+/* Gantt */
+#stintCanvas{display:block;margin:0 auto 8px}
+
+/* Undercut */
+.uc-table{width:100%;border-collapse:collapse}
+.uc-table th{padding:9px 16px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1e2030}
+.uc-table td{padding:10px 16px;border-bottom:1px solid #14161e;font-size:13px}
+.uc-verdict{font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.uc-hot{background:#7f1d1d;color:#fca5a5}
+.uc-possible{background:#78350f;color:#fcd34d}
+.uc-safe{background:#14532d;color:#86efac}
+.uc-hold{background:#1e3a8a;color:#93c5fd}
+
+/* Fastest lap bar */
+#fastestLapBar{padding:5px 20px;display:flex;align-items:center;gap:12px;background:#1a0a2e;border-bottom:1px solid #3b0764;font-size:12px}
+.fl-label{color:#a855f7;font-weight:700;letter-spacing:.5px}
+.fl-time{color:#d8b4fe;font-variant-numeric:tabular-nums;font-weight:600}
+.fl-driver{font-weight:700}
+
+/* Race insights */
+.insights-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;padding:14px}
+.insight-card{background:#13151f;border:1px solid #1e2030;border-radius:10px;padding:13px 15px;display:flex;gap:11px;align-items:flex-start}
+.insight-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+.insight-text{font-size:13px;line-height:1.5;color:#d1d5db}
+.insight-text b{color:#fff}
+
+/* Overcut */
+.oc-table th{padding:9px 16px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1e2030}
+.oc-table td{padding:10px 16px;border-bottom:1px solid #14161e;font-size:13px}
+.oc-verdict{font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.oc-strong{background:#14532d;color:#86efac}
+.oc-marginal{background:#78350f;color:#fcd34d}
+.oc-weak{background:#1e3a8a;color:#93c5fd}
+
+/* Fastest lap row in live table */
+.row-fl td{box-shadow:inset 3px 0 0 #a855f7}
+
+/* Pace chart + deg */
+.chart-wrap{padding:16px 20px}
+.deg-table{width:100%;border-collapse:collapse}
+.deg-table th{padding:9px 16px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1e2030}
+.deg-table td{padding:10px 16px;border-bottom:1px solid #14161e;font-size:13px}
+.deg-ind{font-size:12px;font-weight:700}
+.footer{padding:9px 20px;font-size:11px;color:#374151;border-top:1px solid #1e2030;display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <span class="f1-badge">F1</span>
+    <div>
+      <div class="header-title" id="headerTitle">Strategy Dashboard</div>
+      <div class="header-sub">Near-live · updates every 5s</div>
+    </div>
+  </div>
+  <span id="lastUpdate"></span>
+</div>
+
+<!-- Status -->
+<div id="raceStatus"></div>
+
+<!-- Fastest Lap Bar -->
+<div id="fastestLapBar" style="display:none">
+  <span class="fl-label">⚡ FASTEST LAP</span>
+  <span id="flDriver" class="fl-driver"></span>
+  <span id="flTime" class="fl-time"></span>
+  <span style="color:#6b7280;font-size:11px" id="flLap"></span>
+</div>
+
+<!-- Track Map -->
+<div class="track-section">
+  <canvas id="trackMap" width="1000" height="360"></canvas>
+  <div class="sector-legend">
+    <div class="sector-legend-item"><div class="sector-dot" style="background:#a855f7"></div>Sector 1</div>
+    <div class="sector-legend-item"><div class="sector-dot" style="background:#facc15"></div>Sector 2</div>
+    <div class="sector-legend-item"><div class="sector-dot" style="background:#ef4444"></div>Sector 3</div>
+    <div class="sector-legend-item"><div class="sector-dot" style="background:#fff;border:1px solid #555"></div>S/F</div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" id="tbtn-live" onclick="switchTab('live')">📊 Live Timing</button>
+  <button class="tab-btn" id="tbtn-strategy" onclick="switchTab('strategy')">🏁 Strategy Hub</button>
+  <button class="tab-btn" id="tbtn-pace" onclick="switchTab('pace')">📈 Pace Analysis</button>
+  <button class="tab-btn" id="tbtn-guide" onclick="switchTab('guide')">📖 Guide</button>
+</div>
+
+<!-- Tab 1: Live Timing -->
+<div id="tab-live" class="tab-content active">
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>POS</th><th>Δ</th><th>DRIVER</th><th>TYRE</th><th>AGE</th><th>PIT</th>
+        <th>LAP</th><th>GAP AHEAD</th><th>GAP LEADER</th><th>LAST LAP</th><th>DEG /lap</th><th>TREND</th><th>STATUS</th>
+      </tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Tab 2: Strategy Hub -->
+<div id="tab-strategy" class="tab-content">
+  <div class="section-head">🧠 Race Situation</div>
+  <div class="insights-grid" id="insightsGrid"></div>
+  <div class="section-head">🚦 Pit Windows</div>
+  <div class="pit-grid" id="pitGrid"></div>
+  <div class="section-head">📊 Tyre Stint Timeline</div>
+  <div style="overflow-x:auto;background:#0a0a14;padding:12px 0">
+    <canvas id="stintCanvas"></canvas>
+  </div>
+  <div class="section-head">⚡ Undercut Threat Scanner</div>
+  <div class="table-wrap">
+    <table class="uc-table">
+      <thead><tr>
+        <th>DRIVER</th><th>VS AHEAD</th><th>GAP</th><th>MY DEG</th><th>THEIR DEG</th><th>VERDICT</th>
+      </tr></thead>
+      <tbody id="undercutBody"></tbody>
+    </table>
+  </div>
+  <div class="section-head">🔁 Overcut Analysis</div>
+  <div class="table-wrap">
+    <table class="uc-table oc-table">
+      <thead><tr>
+        <th>DRIVER</th><th>VS BEHIND</th><th>THEIR DEG</th><th>MY TYRE</th><th>LAPS TO COVER</th><th>VERDICT</th>
+      </tr></thead>
+      <tbody id="overcutBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Tab 3: Pace Analysis -->
+<div id="tab-pace" class="tab-content">
+  <div class="section-head">⏱ Current Pace — Avg Last 3 Laps</div>
+  <div class="table-wrap">
+    <table class="pace-table">
+      <thead><tr>
+        <th>RANK</th><th>DRIVER</th><th>AVG PACE</th><th>DELTA TO P1</th><th>TYRE</th><th>TREND</th>
+      </tr></thead>
+      <tbody id="paceBody"></tbody>
+    </table>
+  </div>
+  <div class="section-head">📉 Tyre Degradation Monitor</div>
+  <div class="table-wrap">
+    <table class="deg-table">
+      <thead><tr>
+        <th>DRIVER</th><th>COMPOUND</th><th>AGE</th><th>DEG RATE</th><th>WINDOW</th><th>ASSESSMENT</th>
+      </tr></thead>
+      <tbody id="degBody"></tbody>
+    </table>
+  </div>
+  <div class="section-head">⚡ Fastest Sector Times</div>
+  <div style="padding:8px 10px;font-size:11px;color:#6b7280;display:flex;gap:18px">
+    <span>🟣 Overall fastest in session</span>
+    <span style="background:#78350f;color:#fcd34d;padding:1px 6px;border-radius:3px;font-size:10px">BEST</span> Personal session best
+  </div>
+  <div class="table-wrap">
+    <table class="deg-table">
+      <thead><tr>
+        <th>DRIVER</th><th>S1 BEST</th><th>S1 LAST</th><th>S2 BEST</th><th>S2 LAST</th><th>S3 BEST</th><th>S3 LAST</th><th>THEORETICAL</th>
+      </tr></thead>
+      <tbody id="sectorBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Tab 4: Guide -->
+<div id="tab-guide" class="tab-content">
+<div class="guide-wrap">
+
+  <!-- STATUS BANNER -->
+  <div class="guide-section">
+    <div class="guide-section-title">🟢 Status Banner</div>
+    <div class="guide-section-sub">The coloured strip at the top of the page shows the current race condition.</div>
+    <div class="guide-cards">
+      <div class="guide-card"><div class="guide-card-term"><span style="color:#22c55e">●</span> GREEN FLAG</div><div class="guide-card-def">Racing is underway normally. All gaps and strategies are live.</div></div>
+      <div class="guide-card"><div class="guide-card-term"><span style="color:#eab308">●</span> SAFETY CAR</div><div class="guide-card-def">A physical Safety Car is on track. Gaps compress. Good pit window — the field bunches up.</div></div>
+      <div class="guide-card"><div class="guide-card-term"><span style="color:#f97316">●</span> VIRTUAL SAFETY CAR</div><div class="guide-card-def">VSC deployed — cars must slow to a delta time. Similar pit opportunity to SC but gaps don't fully close.</div></div>
+      <div class="guide-card"><div class="guide-card-term"><span style="color:#ef4444">●</span> RED FLAG</div><div class="guide-card-def">Session suspended. Pit stops free for everyone — strategy resets.</div></div>
+    </div>
+  </div>
+
+  <hr class="guide-divider">
+
+  <!-- FASTEST LAP BAR -->
+  <div class="guide-section">
+    <div class="guide-section-title">⚡ Fastest Lap Bar</div>
+    <div class="guide-section-sub">The purple strip below the status banner. Shows who holds the overall fastest lap of the race so far, their time, and on which lap it was set. Updates every 5 seconds.</div>
+  </div>
+
+  <hr class="guide-divider">
+
+  <!-- TRACK MAP -->
+  <div class="guide-section">
+    <div class="guide-section-title">🗺️ Track Map</div>
+    <div class="guide-section-sub">Near-live positions of all running drivers. DNF drivers are not shown.</div>
+    <div class="guide-cards">
+      <div class="guide-card"><div class="guide-card-term"><span style="color:#a855f7">━━</span> Sector 1</div><div class="guide-card-def">First third of the lap. Purple coloured track segment.</div></div>
+      <div class="guide-card"><div class="guide-card-term"><span style="color:#facc15">━━</span> Sector 2</div><div class="guide-card-def">Middle third. Yellow track segment.</div></div>
+      <div class="guide-card"><div class="guide-card-term"><span style="color:#ef4444">━━</span> Sector 3</div><div class="guide-card-def">Final third. Red track segment.</div></div>
+      <div class="guide-card"><div class="guide-card-term">S/F Marker</div><div class="guide-card-def">White line = Start/Finish line. This is where lap times are measured from.</div></div>
+      <div class="guide-card"><div class="guide-card-term">Driver Dots</div><div class="guide-card-def">Each coloured dot is a driver — colour matches their team. Label shows their 3-letter code.</div></div>
+    </div>
+  </div>
+
+  <hr class="guide-divider">
+
+  <!-- LIVE TIMING -->
+  <div class="guide-section">
+    <div class="guide-section-title">📊 Live Timing — Column Guide</div>
+    <div class="guide-section-sub">The main race order table. Sorted by current race position. DNF drivers appear in a separate section below.</div>
+    <table class="guide-col-table">
+      <thead><tr><th>Column</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td>POS</td><td>Current race position (1 = leader).</td></tr>
+        <tr><td>Δ (Delta)</td><td>Position change since the last screen refresh. ▲ = gained, ▼ = lost, – = no change.</td></tr>
+        <tr><td>DRIVER</td><td>Driver three-letter code, coloured by team.</td></tr>
+        <tr><td>TYRE</td><td>Current tyre compound — <span class="guide-pill" style="background:#ff3333;color:#111">SOFT</span> <span class="guide-pill" style="background:#ffdd00;color:#111">MEDIUM</span> <span class="guide-pill" style="background:#d1d5db;color:#111">HARD</span> <span class="guide-pill" style="background:#39b54a;color:#111">INTER</span> <span class="guide-pill" style="background:#2563eb;color:#fff">WET</span></td></tr>
+        <tr><td>AGE</td><td>How many laps the current set of tyres has been on the car.</td></tr>
+        <tr><td>PIT</td><td>Total number of pit stops this driver has made.</td></tr>
+        <tr><td>LAP</td><td>Last completed lap number.</td></tr>
+        <tr><td>GAP AHEAD</td><td>Time gap in seconds to the car directly ahead. Based on cumulative race time.</td></tr>
+        <tr><td>GAP LEADER</td><td>Total time gap in seconds to the race leader.</td></tr>
+        <tr><td>LAST LAP</td><td>The lap time (M:SS.mmm) set on the most recently completed lap.</td></tr>
+        <tr><td>DEG /lap</td><td>Tyre degradation rate. How many seconds per lap the driver is losing due to tyre wear. Positive = getting slower, negative = improving.</td></tr>
+        <tr><td>TREND</td><td>Mini spark-line of the last 6 lap times. Rising line = getting slower, falling = faster.</td></tr>
+        <tr><td>STATUS</td><td>Any notable flag or event for this driver. Blank during normal racing.</td></tr>
+        <tr><td>DNF badge</td><td>Red badge for retired/Did Not Finish drivers shown below the main table.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="guide-divider">
+
+  <!-- STRATEGY HUB -->
+  <div class="guide-section">
+    <div class="guide-section-title">🏁 Strategy Hub</div>
+    <div class="guide-section-sub">Auto-generated strategy insights. All calculated from live lap data — no manual input needed.</div>
+
+    <div class="guide-card-term" style="margin-bottom:8px;font-size:13px;font-weight:700">🧠 Race Situation Cards</div>
+    <div class="guide-card-def" style="color:#9ca3af;font-size:12px;margin-bottom:14px">Auto-generated bullet insights. Refreshes every 5 seconds. Examples: leader gap, who has the fastest pace on track, overdue tyres, active undercut threats, and compound strategy split in the top 5.</div>
+
+    <div class="guide-card-term" style="margin-bottom:8px;font-size:13px;font-weight:700">🚦 Pit Windows</div>
+    <div class="guide-section-sub">A card per driver showing how close they are to the typical tyre limit for their compound.</div>
+    <table class="guide-col-table" style="margin-bottom:14px">
+      <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td style="color:#3b82f6">🔵 FRESH</td><td>Tyre below 50% of its typical life. No urgency.</td></tr>
+        <tr><td style="color:#eab308">🟡 OPENING</td><td>50–75% of typical life. Pit window is opening — worth monitoring.</td></tr>
+        <tr><td style="color:#22c55e">🟢 PIT NOW</td><td>75–100% of typical life. Optimal pit window — pitting here is strategically correct.</td></tr>
+        <tr><td style="color:#ef4444">🔴 OVERDUE</td><td>Past typical life. Risk of tyre failure or heavy pace loss. Pit immediately.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="guide-card-term" style="margin-bottom:8px;font-size:13px;font-weight:700">📊 Tyre Stint Timeline (Gantt)</div>
+    <div class="guide-card-def" style="color:#9ca3af;font-size:12px;margin-bottom:14px">A lap-by-lap bar chart showing every tyre stint for each driver. The letter inside each bar (S/M/H) is the compound. The white dashed vertical line marks the current lap. Compare stint lengths to understand each team's strategy.</div>
+
+    <div class="guide-card-term" style="margin-bottom:8px;font-size:13px;font-weight:700">⚡ Undercut Threat Scanner</div>
+    <div class="guide-section-sub">Compares each driver to the car directly ahead to assess whether pitting early (undercutting) could gain them a position.</div>
+    <table class="guide-col-table" style="margin-bottom:14px">
+      <thead><tr><th>Verdict</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>⚔️ Battle – Hold</td><td>Gap is under 1.5s. Too close to pit — hold position and race on track.</td></tr>
+        <tr><td>🔴 Undercut Now</td><td>Gap 1.5–5s and high degradation. Pitting now could jump the car ahead during the stop.</td></tr>
+        <tr><td>🟡 Possible</td><td>Gap 5–15s with moderate degradation. Worth watching — conditions could change.</td></tr>
+        <tr><td>🟢 Safe</td><td>No immediate undercut threat. Gap is comfortable or degradation is low.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="guide-card-term" style="margin-bottom:8px;font-size:13px;font-weight:700">🔁 Overcut Analysis</div>
+    <div class="guide-card-def" style="color:#9ca3af;font-size:12px;margin-bottom:14px">The opposite of an undercut. Shows whether a driver currently ahead can <i>stay out</i> while the car behind pits, and still come out in front by the time they also stop — because the car behind degrades badly. "Laps to Cover" estimates how many laps the behind car needs to close the gap on fresh tyres.</div>
+    <table class="guide-col-table">
+      <thead><tr><th>Verdict</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>🟢 Strong – Stay Out</td><td>The car behind degrades fast and the gap is under 10s. Staying out is the better strategy.</td></tr>
+        <tr><td>🟡 Marginal – Monitor</td><td>Overcut might work but it's close. Monitor lap-by-lap.</td></tr>
+        <tr><td>🔵 Not viable</td><td>Not enough degradation difference or gap is too large. No overcut advantage.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="guide-divider">
+
+  <!-- PACE ANALYSIS -->
+  <div class="guide-section">
+    <div class="guide-section-title">📈 Pace Analysis</div>
+    <div class="guide-section-sub">A deeper look at raw car performance, independent of track position or pit strategy.</div>
+
+    <div class="guide-card-term" style="margin-bottom:8px;font-size:13px;font-weight:700">⏱ Pace Leaderboard</div>
+    <div class="guide-section-sub">Ranks drivers by average lap time over their last 3 laps — regardless of position. This tells you who has the quickest car <i>right now</i>, not who is leading on track.</div>
+    <table class="guide-col-table" style="margin-bottom:14px">
+      <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>RANK</td><td>🥇/P2/P3… — pace rank from fastest to slowest.</td></tr>
+        <tr><td>AVG PACE</td><td>Mean of the last 3 completed lap times in M:SS.mmm.</td></tr>
+        <tr><td>DELTA TO P1</td><td>How much slower (in seconds) vs. the fastest driver on track. "Fastest ⚡" for the leader.</td></tr>
+        <tr><td>TYRE</td><td>Current compound — useful context for pace comparison (different compounds perform differently).</td></tr>
+        <tr><td>TREND</td><td>→ Stable = consistent pace. ↗ Slight / ↗ Rising = getting slower. ↘ Improving = getting faster.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="guide-card-term" style="margin-bottom:8px;font-size:13px;font-weight:700">📉 Tyre Degradation Monitor</div>
+    <div class="guide-section-sub">Sorted by degradation rate — drivers at the top are losing the most time per lap due to tyre wear.</div>
+    <table class="guide-col-table" style="margin-bottom:14px">
+      <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>DEG RATE</td><td>Seconds per lap lost due to tyre wear. Calculated via linear regression on the last 8 laps. Colour: 🔴 &gt;0.30s (heavy), 🟡 0.10–0.30s (moderate), 🟢 0–0.10s (low), 💙 negative (improving).</td></tr>
+        <tr><td>WINDOW</td><td>Same pit window status as the Strategy Hub cards.</td></tr>
+        <tr><td>ASSESSMENT</td><td>Plain-English summary: Heavy / Moderate / Low / Improving.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="guide-card-term" style="margin-bottom:8px;font-size:13px;font-weight:700">⚡ Fastest Sector Times</div>
+    <div class="guide-section-sub">Shows each driver's personal best and last-lap times for all three sectors, plus a Theoretical Best lap.</div>
+    <table class="guide-col-table">
+      <thead><tr><th>Indicator</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td style="color:#e9d5ff">Purple cell</td><td>This driver set the overall fastest time in this sector across the entire session.</td></tr>
+        <tr><td><span class="guide-pill" style="background:#78350f;color:#fcd34d">BEST</span></td><td>The driver matched their personal session best on their last lap — they're at peak performance in this sector.</td></tr>
+        <tr><td>S1 / S2 / S3 LAST</td><td>Sector time on their most recently completed lap (greyed). Compare to BEST to see if they're improving or dropping off.</td></tr>
+        <tr><td style="color:#a855f7">THEORETICAL</td><td>Sum of S1 + S2 + S3 personal bests. This is the fastest possible lap this driver could theoretically do if they strung together all their best sectors in one lap.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="guide-divider">
+
+  <!-- TYRES -->
+  <div class="guide-section">
+    <div class="guide-section-title">🏎️ Tyre Compounds</div>
+    <div class="guide-section-sub">Different compounds offer different trade-offs between speed and durability.</div>
+    <div class="guide-cards">
+      <div class="guide-card"><div class="guide-card-term"><span class="guide-pill" style="background:#ff3333;color:#111">SOFT</span></div><div class="guide-card-def">Fastest compound but wears quickest. Used for qualifying pace or undercut attempts. Typical life ~22 laps.</div></div>
+      <div class="guide-card"><div class="guide-card-term"><span class="guide-pill" style="background:#ffdd00;color:#111">MEDIUM</span></div><div class="guide-card-def">Balanced compound. Solid race pace with better durability. Typical life ~38 laps.</div></div>
+      <div class="guide-card"><div class="guide-card-term"><span class="guide-pill" style="background:#d1d5db;color:#111">HARD</span></div><div class="guide-card-def">Slowest but most durable. Used for long stints. Typical life ~52 laps.</div></div>
+      <div class="guide-card"><div class="guide-card-term"><span class="guide-pill" style="background:#39b54a;color:#111">INTER</span></div><div class="guide-card-def">Intermediate — for damp or light wet conditions. Not suited for a dry track.</div></div>
+      <div class="guide-card"><div class="guide-card-term"><span class="guide-pill" style="background:#2563eb;color:#fff">WET</span></div><div class="guide-card-def">Full wet tyre for heavy rain. Maximum grip on standing water.</div></div>
+    </div>
+  </div>
+
+  <hr class="guide-divider">
+
+  <!-- DATA -->
+  <div class="guide-section">
+    <div class="guide-section-title">📡 How the Data Works</div>
+    <div class="guide-cards">
+      <div class="guide-card"><div class="guide-card-term">Update Frequency</div><div class="guide-card-def">Dashboard fetches new data every <b>5 seconds</b>. The fetcher also refreshes every 5 seconds. Total lag from track to screen is typically <b>15–40 seconds</b> during a live race.</div></div>
+      <div class="guide-card"><div class="guide-card-term">Data Source</div><div class="guide-card-def">Powered by <b>FastF1</b>, which connects to the official Formula 1 timing feed. The same data used by broadcast graphics.</div></div>
+      <div class="guide-card"><div class="guide-card-term">Gap Calculation</div><div class="guide-card-def">Gaps are calculated from <b>cumulative race time</b> (sum of all lap times). This approximates the real on-track gap. Minor differences from broadcast may occur on lapped traffic.</div></div>
+      <div class="guide-card"><div class="guide-card-term">Degradation Model</div><div class="guide-card-def">Uses linear regression on the last 8 laps. Needs at least 4 laps of data to appear. Early in a stint, the value may fluctuate.</div></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<div class="footer">
+  <span>🏎️ F1 Strategy Dashboard 2026</span>
+  <span id="footerUpdate">–</span>
+</div>
+</div>
+
+<script>
+const DATA_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://localhost:8000/race_data.json"   // local dev
+  : "/api/race_data"                          // Vercel production
+
+// 2026 teams
+const teamColors = {
+  VER:"#3671C6",HAD:"#3671C6",
+  LEC:"#ED1131",HAM:"#ED1131",
+  NOR:"#ef8733",PIA:"#ef8733",
+  RUS:"#27F4D2",ANT:"#27F4D2",
+  ALO:"#037A68",STR:"#037A68",
+  GAS:"#F282B4",COL:"#F282B4",
+  OCO:"#EB0A1E",BEA:"#EB0A1E",
+  LAW:"#6692FF",LIN:"#6692FF",
+  ALB:"#00A0DE",SAI:"#00A0DE",
+  HUL:"#53FC18",BOR:"#53FC18",
+  PER:"#CC0000",BOT:"#CC0000",
+}
+
+const compoundColors = {
+  SOFT:"#ff3333", MEDIUM:"#ffdd00", HARD:"#d1d5db",
+  INTERMEDIATE:"#39b54a", WET:"#2563eb", UNKNOWN:"#6b7280"
+}
+
+const TYPICAL_LIFE  = { SOFT:22, MEDIUM:38, HARD:52, INTERMEDIATE:28, WET:20 }
+const PIT_LOSS_SECS = 22
+
+let chartInstances = {}
+let prevPositions  = {}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function tyreClass(c) {
+  if (!c) return ""
+  const l = c.toLowerCase()
+  if (l.includes("soft"))   return "soft"
+  if (l.includes("medium")) return "medium"
+  if (l.includes("hard"))   return "hard"
+  if (l.includes("inter"))  return "inter"
+  if (l.includes("wet"))    return "wet"
+  return ""
+}
+
+function formatGap(g) {
+  if (g === null || g === "-" || g === undefined || isNaN(g)) return "–"
+  const v = parseFloat(g)
+  return (v >= 0 ? "+" : "") + v.toFixed(3)
+}
+
+function secsToLapStr(s) {
+  if (!s) return "–"
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return `${m}:${r.toFixed(3).padStart(6,"0")}`
+}
+
+function pitWindowStatus(compound, age) {
+  const life = TYPICAL_LIFE[(compound||"").toUpperCase()] || 35
+  const pct  = age / life
+  if (pct > 1.0)  return { label:"OVERDUE!",  cls:"w-overdue",  barColor:"#ef4444", text:"🔴 Overdue",  pct }
+  if (pct >= 0.75) return { label:"PIT NOW",   cls:"w-pit",     barColor:"#22c55e", text:"🟢 Pit Now",  pct }
+  if (pct >= 0.50) return { label:"OPENING",   cls:"w-opening", barColor:"#eab308", text:"🟡 Opening",  pct }
+  return                  { label:"FRESH",      cls:"w-fresh",   barColor:"#3b82f6", text:"🔵 Fresh",    pct }
+}
+
+function degColor(d) {
+  if (d === null) return "#6b7280"
+  if (d > 0.30) return "#ef4444"
+  if (d > 0.10) return "#eab308"
+  if (d >= 0)   return "#22c55e"
+  return "#38bdf8"
+}
+
+function degText(d) {
+  if (d === null) return "–"
+  const sign = d >= 0 ? "+" : ""
+  return sign + d.toFixed(3) + "s"
+}
+
+function degAssessment(d) {
+  if (d === null) return { label:"–", cls:"" }
+  if (d > 0.30) return { label:"🔴 Heavy", cls:"" }
+  if (d > 0.10) return { label:"🟡 Moderate", cls:"" }
+  if (d >= 0)   return { label:"🟢 Low", cls:"" }
+  return              { label:"💪 Improving", cls:"" }
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"))
+  document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"))
+  document.getElementById("tab-" + tab).classList.add("active")
+  document.getElementById("tbtn-" + tab).classList.add("active")
+}
+
+// ── Track Map ─────────────────────────────────────────────────────────────
+function drawTrack(data) {
+  const canvas = document.getElementById("trackMap")
+  const ctx    = canvas.getContext("2d")
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  const tx = data.track_x, ty = data.track_y
+  if (!tx || !tx.length) return
+
+  const minX = Math.min(...tx), maxX = Math.max(...tx)
+  const minY = Math.min(...ty), maxY = Math.max(...ty)
+  const PAD  = 55
+  const scale = Math.min((canvas.width-PAD*2)/(maxX-minX),(canvas.height-PAD*2)/(maxY-minY))
+  const offX  = (canvas.width  - (maxX-minX)*scale)/2
+  const offY  = (canvas.height - (maxY-minY)*scale)/2
+
+  function proj(xi,yi) {
+    return { x:(xi-minX)*scale+offX, y:canvas.height-((yi-minY)*scale+offY) }
+  }
+
+  const n   = tx.length
+  const s1  = Math.floor(n/3), s2 = Math.floor(2*n/3)
+  const segs = [
+    {from:0,   to:s1,   col:"#a855f7"},
+    {from:s1,  to:s2,   col:"#facc15"},
+    {from:s2,  to:n-1,  col:"#ef4444"},
+  ]
+
+  ctx.shadowBlur=7; ctx.shadowColor="rgba(150,150,255,.2)"
+  ctx.lineCap="round"; ctx.lineJoin="round"
+
+  segs.forEach(seg => {
+    ctx.beginPath(); ctx.strokeStyle=seg.col; ctx.lineWidth=4
+    for (let i=seg.from;i<=seg.to;i++) {
+      const p=proj(tx[i],ty[i])
+      i===seg.from ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y)
+    }
+    ctx.stroke()
+  })
+  // close track
+  const pL=proj(tx[n-1],ty[n-1]),p0=proj(tx[0],ty[0])
+  ctx.beginPath(); ctx.strokeStyle="#ef4444"; ctx.lineWidth=4
+  ctx.moveTo(pL.x,pL.y); ctx.lineTo(p0.x,p0.y); ctx.stroke()
+  ctx.shadowBlur=0
+
+  // S/F marker
+  const sf=proj(tx[0],ty[0]), p1=proj(tx[1],ty[1])
+  const ang=Math.atan2(p1.y-sf.y, p1.x-sf.x)
+  const nx=Math.cos(ang+Math.PI/2)*12, ny=Math.sin(ang+Math.PI/2)*12
+  ctx.strokeStyle="#fff"; ctx.lineWidth=3
+  ctx.beginPath(); ctx.moveTo(sf.x+nx,sf.y+ny); ctx.lineTo(sf.x-nx,sf.y-ny); ctx.stroke()
+  ctx.fillStyle="#fff"; ctx.font="bold 9px Inter,Arial"; ctx.fillText("S/F",sf.x+5,sf.y-7)
+
+  // Driver dots — use == null check so x=0 doesn't hide a driver at origin
+  ;(data.drivers||[]).forEach(d => {
+    if (d.x == null || d.retired) return
+    const p=proj(d.x,d.y)
+    const col=teamColors[d.driver_code]||"#888"
+    ctx.beginPath(); ctx.arc(p.x,p.y,7,0,Math.PI*2); ctx.fillStyle=col+"44"; ctx.fill()
+    ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fillStyle=col; ctx.fill()
+    ctx.strokeStyle="rgba(0,0,0,.6)"; ctx.lineWidth=1; ctx.stroke()
+    ctx.fillStyle="#fff"; ctx.font="bold 9px Inter,Arial"; ctx.fillText(d.driver_code||"",p.x+7,p.y+4)
+  })
+}
+
+// ── Stint Gantt ───────────────────────────────────────────────────────────
+function drawStintGantt(classified) {
+  const canvas = document.getElementById("stintCanvas")
+  if (!canvas) return
+  if (!classified.length) return
+
+  const ROW_H  = 30, PAD_L = 70, PAD_R = 30, PAD_T = 30, PAD_B = 10
+  const W      = Math.max(900, window.innerWidth - 60)
+  const maxLap = Math.max(...classified.map(d => d.lap_number||0), 10)
+
+  canvas.width  = W
+  canvas.height = classified.length * ROW_H + PAD_T + PAD_B
+  const ctx     = canvas.getContext("2d")
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  const chartW = W - PAD_L - PAD_R
+  function lapX(lap) { return PAD_L + (lap/maxLap)*chartW }
+
+  // Grid lines
+  ctx.strokeStyle = "#1e2030"; ctx.lineWidth = 1
+  for (let l=0; l<=maxLap; l+=5) {
+    const x = lapX(l)
+    ctx.beginPath(); ctx.moveTo(x, PAD_T-4); ctx.lineTo(x, canvas.height-PAD_B); ctx.stroke()
+    if (l%10===0) {
+      ctx.fillStyle="#4b5563"; ctx.font="10px Inter,Arial"
+      ctx.fillText("L"+l, x-8, PAD_T-8)
+    }
+  }
+
+  classified.forEach((d, i) => {
+    const y = PAD_T + i*ROW_H
+
+    // Driver label
+    const col = teamColors[d.driver_code]||"#888"
+    ctx.fillStyle = col
+    ctx.font = "bold 11px Inter,Arial"
+    ctx.fillText(d.driver_code||"-", 4, y+19)
+
+    // Stints
+    const stints = d.stint_history || []
+    stints.forEach(s => {
+      const x1 = lapX(s.start_lap - 1)
+      const x2 = lapX(s.end_lap)
+      const cc = (s.compound||"UNKNOWN").toUpperCase()
+      const fillCol = compoundColors[cc] || "#6b7280"
+
+      ctx.fillStyle = fillCol
+      ctx.beginPath()
+      ctx.roundRect(x1, y+3, Math.max(x2-x1, 2), ROW_H-6, 3)
+      ctx.fill()
+
+      // Compound label
+      if (x2 - x1 > 18) {
+        ctx.fillStyle = (cc==="MEDIUM"||cc==="HARD") ? "#111" : "#111"
+        ctx.font = "bold 10px Inter,Arial"
+        ctx.fillText(cc[0], x1+5, y+18)
+      }
+    })
+
+    // Current tyre age indicator line
+    if (d.lap_number) {
+      const xNow = lapX(d.lap_number)
+      ctx.strokeStyle = "#fff3"; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(xNow, PAD_T); ctx.lineTo(xNow, canvas.height-PAD_B); ctx.stroke()
+    }
+  })
+}
+
+// ── Pit Window Cards ──────────────────────────────────────────────────────
+function renderPitWindows(classified) {
+  const grid = document.getElementById("pitGrid")
+  grid.innerHTML = ""
+  classified.forEach(d => {
+    const name     = d.driver_code || "?"
+    const compound = (d.compound||"").toUpperCase()
+    const age      = d.tyre_age || 0
+    const life     = TYPICAL_LIFE[compound] || 35
+    const ws       = pitWindowStatus(compound, age)
+    const lapsLeft = Math.max(0, Math.round(life - age))
+    const col      = teamColors[name] || "#888"
+    const barPct   = Math.min(ws.pct * 100, 100).toFixed(1)
+    const lapsLeftStr = lapsLeft > 0 ? `~${lapsLeft} laps left` : "Tyre past limit!"
+
+    const div = document.createElement("div")
+    div.className = `pit-card ${ws.cls}`
+    div.innerHTML = `
+      <div class="pc-top">
+        <span class="pc-name" style="color:${col}">${name}</span>
+        <span class="pc-badge">${ws.label}</span>
+      </div>
+      <div class="pc-tyre">${compound} · Age: ${age} laps</div>
+      <div class="pc-bar-bg"><div class="pc-bar-fg" style="width:${barPct}%;background:${ws.barColor}"></div></div>
+      <div class="pc-status">${ws.text}</div>
+      <div class="pc-laps">${lapsLeftStr} / ${life} typical</div>
+    `
+    grid.appendChild(div)
+  })
+}
+
+// ── Undercut Scanner ──────────────────────────────────────────────────────
+function renderUndercut(classified) {
+  const body = document.getElementById("undercutBody")
+  body.innerHTML = ""
+  for (let i=1; i<classified.length; i++) {
+    const d    = classified[i]
+    const prev = classified[i-1]
+    const gap  = typeof d.gap_to_ahead === "number" ? d.gap_to_ahead : null
+    const myDeg   = d.tyre_deg
+    const theirDeg = prev.tyre_deg
+    const col  = teamColors[d.driver_code]||"#888"
+    const pcol = teamColors[prev.driver_code]||"#888"
+
+    let verdict, vClass
+    if (gap === null) {
+      verdict="No data"; vClass=""
+    } else if (gap < 1.5) {
+      verdict="⚔️ Battle – Hold"; vClass="uc-hold"
+    } else if (gap < 5 && myDeg !== null && myDeg > 0.15) {
+      verdict="🔴 Undercut Now"; vClass="uc-hot"
+    } else if (gap < 15 && myDeg !== null && myDeg > 0.1) {
+      verdict="🟡 Possible"; vClass="uc-possible"
+    } else {
+      verdict="🟢 Safe"; vClass="uc-safe"
+    }
+
+    const degFmt = v => v===null ? "–" : (v>=0?"+":"")+v.toFixed(3)+"s/l"
+    const tr = document.createElement("tr")
+    tr.innerHTML = `
+      <td><span style="font-weight:700;color:${col}">${d.driver_code}</span></td>
+      <td><span style="font-weight:700;color:${pcol}">${prev.driver_code}</span></td>
+      <td>${gap===null||isNaN(gap) ? "–" : (gap>=0?"+":"")+gap.toFixed(3)+"s"}</td>
+      <td style="color:${degColor(myDeg)}">${degFmt(myDeg)}</td>
+      <td style="color:${degColor(theirDeg)}">${degFmt(theirDeg)}</td>
+      <td><span class="uc-verdict ${vClass}">${verdict}</span></td>
+    `
+    body.appendChild(tr)
+  }
+}
+
+// ── State: fastest lap tracker ────────────────────────────────────────────
+let fastestLap = null
+
+function parseLapTime(str) {
+  if (!str || str === "–") return Infinity
+  const parts = str.split(":")
+  return parts.length === 2 ? parseInt(parts[0])*60 + parseFloat(parts[1]) : parseFloat(str)
+}
+
+function updateFastestLap(classified) {
+  classified.forEach(d => {
+    if (!d.last_lap) return
+    const secs = parseLapTime(d.last_lap)
+    if (secs < Infinity && (!fastestLap || secs < fastestLap.lapTime)) {
+      fastestLap = { driverCode:d.driver_code, lapTime:secs, lapStr:d.last_lap, lapNumber:d.lap_number, teamColor:teamColors[d.driver_code]||"#a855f7" }
+    }
+  })
+  if (!fastestLap) return
+  const bar = document.getElementById("fastestLapBar")
+  bar.style.display = "flex"
+  const el = document.getElementById("flDriver")
+  el.textContent = fastestLap.driverCode; el.style.color = fastestLap.teamColor
+  document.getElementById("flTime").textContent = fastestLap.lapStr
+  document.getElementById("flLap").textContent  = fastestLap.lapNumber ? `· Lap ${fastestLap.lapNumber}` : ""
+}
+
+// ── Race Situation Insights ───────────────────────────────────────────────
+function generateInsights(classified) {
+  const grid = document.getElementById("insightsGrid")
+  grid.innerHTML = ""
+  const insights = []
+
+  if (!classified.length) {
+    insights.push({ icon:"⏳", text:"Waiting for race data…" })
+  } else {
+    const leader = classified[0], p2 = classified[1]
+
+    if (p2 && typeof p2.gap_to_leader === "number")
+      insights.push({ icon:"🏆", text:`<b>${leader.driver_code}</b> leads <b>${p2.driver_code}</b> by <b>${p2.gap_to_leader.toFixed(3)}s</b>` })
+
+    // Fastest pace driver not leading
+    const withPace = classified.filter(d => d.avg_pace_3 != null && d.avg_pace_3 > 0)
+    if (withPace.length > 1) {
+      const fastest = [...withPace].sort((a,b)=>a.avg_pace_3-b.avg_pace_3)[0]
+      if (fastest.driver_code !== leader.driver_code && leader.avg_pace_3) {
+        const d = (leader.avg_pace_3 - fastest.avg_pace_3).toFixed(3)
+        insights.push({ icon:"⚡", text:`<b>${fastest.driver_code}</b> is fastest on track — <b>${d}s/lap quicker</b> than ${leader.driver_code}` })
+      }
+    }
+
+    // Overdue tyres
+    const overdue = classified.filter(d => d.tyre_age > (TYPICAL_LIFE[(d.compound||"").toUpperCase()]||35))
+    if (overdue.length)
+      insights.push({ icon:"🔴", text:`<b>${overdue.map(d=>d.driver_code).join(", ")}</b> past tyre life — pit imminent` })
+
+    // Window open
+    const open = classified.filter(d => { const pct=d.tyre_age/(TYPICAL_LIFE[(d.compound||"").toUpperCase()]||35); return pct>=0.75&&pct<1 })
+    if (open.length)
+      insights.push({ icon:"🟢", text:`Pit window open: <b>${open.map(d=>d.driver_code).join(", ")}</b>` })
+
+    // Undercut threat
+    for (let i=1;i<classified.length;i++) {
+      const d=classified[i], prev=classified[i-1]
+      const gap=typeof d.gap_to_ahead==="number"?d.gap_to_ahead:null
+      if (gap!==null&&gap<5&&d.tyre_deg!==null&&d.tyre_deg>0.15) {
+        insights.push({ icon:"⚔️", text:`<b>${d.driver_code}</b> can undercut <b>${prev.driver_code}</b> — gap ${gap.toFixed(3)}s, deg +${d.tyre_deg.toFixed(2)}s/l` })
+        break
+      }
+    }
+
+    // Compound age disparity
+    const byComp = {}
+    classified.forEach(d => { const c=(d.compound||"?").toUpperCase(); (byComp[c]=byComp[c]||[]).push(d) })
+    for (const [comp, drivers] of Object.entries(byComp)) {
+      if (drivers.length >= 2) {
+        const old = drivers.reduce((a,b)=>(a.tyre_age||0)>(b.tyre_age||0)?a:b)
+        const nw  = drivers.reduce((a,b)=>(a.tyre_age||0)<(b.tyre_age||0)?a:b)
+        if ((old.tyre_age||0)-(nw.tyre_age||0) >= 10)
+          { insights.push({ icon:"🔄", text:`${comp}: <b>${old.driver_code}</b> has ${(old.tyre_age||0)-(nw.tyre_age||0)} more laps on set than <b>${nw.driver_code}</b>` }); break }
+      }
+    }
+
+    // Strategy mix top 5
+    const compounds = [...new Set(classified.slice(0,5).map(d=>(d.compound||"?").toUpperCase()))]
+    if (compounds.length >= 2)
+      insights.push({ icon:"📊", text:`Top-5 split: <b>${compounds.join(" + ")}</b> — two-strategy race` })
+  }
+
+  insights.forEach(({ icon, text }) => {
+    const div = document.createElement("div")
+    div.className = "insight-card"
+    div.innerHTML = `<div class="insight-icon">${icon}</div><div class="insight-text">${text}</div>`
+    grid.appendChild(div)
+  })
+}
+
+// ── Overcut Analysis ──────────────────────────────────────────────────────
+function renderOvercut(classified) {
+  const body = document.getElementById("overcutBody")
+  body.innerHTML = ""
+  for (let i=0; i<classified.length-1; i++) {
+    const d=classified[i], behind=classified[i+1]
+    const gap=typeof behind.gap_to_ahead==="number"?behind.gap_to_ahead:null
+    const theirDeg=behind.tyre_deg
+    const myAge=d.tyre_age||0, myLife=TYPICAL_LIFE[(d.compound||"").toUpperCase()]||35
+    const myPct=((myAge/myLife)*100).toFixed(0)+"%"
+    const col=teamColors[d.driver_code]||"#888", bcol=teamColors[behind.driver_code]||"#888"
+
+    let verdict="🔵 Not viable", vClass="oc-weak", lapsToClose="–"
+    if (gap!==null && theirDeg!==null && theirDeg>0.15 && gap<20) {
+      const laps=Math.min(Math.ceil(gap/theirDeg),30)
+      lapsToClose = `~${laps} laps`
+      verdict = gap<10 ? "🟢 Strong – Stay Out" : "🟡 Marginal – Monitor"
+      vClass  = gap<10 ? "oc-strong" : "oc-marginal"
+    }
+
+    const degFmt = v => v===null?"–":(v>=0?"+":"")+v.toFixed(3)+"s/l"
+    const tr = document.createElement("tr")
+    tr.innerHTML = `
+      <td><span style="font-weight:700;color:${col}">${d.driver_code}</span></td>
+      <td><span style="font-weight:700;color:${bcol}">${behind.driver_code}</span></td>
+      <td style="color:${degColor(theirDeg)}">${degFmt(theirDeg)}</td>
+      <td><span class="tyre ${tyreClass(d.compound)}">${d.compound||"–"}</span> <span style="color:#6b7280;font-size:11px">${myPct} used</span></td>
+      <td style="color:#9ca3af">${lapsToClose}</td>
+      <td><span class="oc-verdict ${vClass}">${verdict}</span></td>
+    `
+    body.appendChild(tr)
+  }
+}
+
+// ── Sector Times ──────────────────────────────────────────────────────────
+function renderSectorTimes(classified) {
+  const body = document.getElementById("sectorBody")
+  if (!body) return
+  body.innerHTML = ""
+
+  const driversWithSectors = classified.filter(d => d.s1_best || d.s2_best || d.s3_best)
+  if (!driversWithSectors.length) {
+    body.innerHTML = `<tr><td colspan="8" style="color:#4b5563;padding:20px;text-align:center">Sector times available after first full lap</td></tr>`
+    return
+  }
+
+  // Find overall fastest per sector
+  const best = {
+    s1: Math.min(...driversWithSectors.map(d => d.s1_best || Infinity)),
+    s2: Math.min(...driversWithSectors.map(d => d.s2_best || Infinity)),
+    s3: Math.min(...driversWithSectors.map(d => d.s3_best || Infinity)),
+  }
+
+  function fmtS(secs) {
+    if (!secs) return "<span style='color:#4b5563'>–</span>"
+    return secs.toFixed(3)
+  }
+
+  function cellStyle(val, bestVal, lastVal) {
+    if (!val) return { style:"color:#4b5563", badge:"" }
+    const isSessionBest = (Math.abs(val - bestVal) < 0.001)
+    const isPersonalLast = lastVal && Math.abs(val - lastVal) < 0.001
+    if (isSessionBest)
+      return { style:"background:rgba(168,85,247,.25);color:#e9d5ff;font-weight:700;border-radius:4px;padding:2px 6px", badge:"" }
+    if (isPersonalLast)
+      return { style:"color:#fcd34d", badge:`<span style="background:#78350f;color:#fcd34d;font-size:9px;padding:1px 4px;border-radius:3px;margin-left:4px">BEST</span>` }
+    return { style:"color:#9ca3af", badge:"" }
+  }
+
+  driversWithSectors.forEach(d => {
+    const col    = teamColors[d.driver_code] || "#888"
+    const s1c    = cellStyle(d.s1_best, best.s1, d.s1_last)
+    const s2c    = cellStyle(d.s2_best, best.s2, d.s2_last)
+    const s3c    = cellStyle(d.s3_best, best.s3, d.s3_last)
+
+    const s1l    = d.s1_last ? `<span style="color:#6b7280;font-size:11px">${d.s1_last.toFixed(3)}</span>` : "–"
+    const s2l    = d.s2_last ? `<span style="color:#6b7280;font-size:11px">${d.s2_last.toFixed(3)}</span>` : "–"
+    const s3l    = d.s3_last ? `<span style="color:#6b7280;font-size:11px">${d.s3_last.toFixed(3)}</span>` : "–"
+
+    const theoBest = (d.s1_best && d.s2_best && d.s3_best)
+      ? `<span style="color:#a855f7;font-weight:600">${(d.s1_best+d.s2_best+d.s3_best).toFixed(3)}s</span>`
+      : "–"
+
+    const tr = document.createElement("tr")
+    tr.innerHTML = `
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <div style="width:4px;height:20px;border-radius:2px;background:${col}"></div>
+        <span style="font-weight:700;color:${col}">${d.driver_code}</span>
+      </div></td>
+      <td><span style="${s1c.style}">${fmtS(d.s1_best)}</span>${s1c.badge}</td>
+      <td>${s1l}</td>
+      <td><span style="${s2c.style}">${fmtS(d.s2_best)}</span>${s2c.badge}</td>
+      <td>${s2l}</td>
+      <td><span style="${s3c.style}">${fmtS(d.s3_best)}</span>${s3c.badge}</td>
+      <td>${s3l}</td>
+      <td>${theoBest}</td>
+    `
+    body.appendChild(tr)
+  })
+}
+
+// ── Pace Leaderboard Table ────────────────────────────────────────────────
+function renderPaceTable(classified) {
+  const body = document.getElementById("paceBody")
+  if (!body) return
+  body.innerHTML = ""
+
+  const withPace = classified
+    .filter(d => d.avg_pace_3 !== null && d.avg_pace_3 > 0)
+    .sort((a, b) => a.avg_pace_3 - b.avg_pace_3)   // fastest first
+
+  if (!withPace.length) {
+    body.innerHTML = `<tr><td colspan="6" style="color:#4b5563;padding:20px;text-align:center">Pace data available after 3 laps on current tyre</td></tr>`
+    return
+  }
+
+  const fastest = withPace[0].avg_pace_3
+
+  withPace.forEach((d, i) => {
+    const col      = teamColors[d.driver_code] || "#888"
+    const delta    = d.avg_pace_3 - fastest
+    const deltaStr = i === 0
+      ? `<span style="color:#22c55e;font-weight:700">Fastest ⚡</span>`
+      : `<span style="color:#f59e0b;font-variant-numeric:tabular-nums">+${delta.toFixed(3)}s</span>`
+
+    // Pace trend from deg rate
+    let trend = "<span style='color:#6b7280'>→ Stable</span>"
+    if (d.tyre_deg !== null) {
+      if      (d.tyre_deg > 0.20)  trend = "<span style='color:#ef4444'>📉 Fading</span>"
+      else if (d.tyre_deg > 0.07)  trend = "<span style='color:#eab308'>↘ Slight</span>"
+      else if (d.tyre_deg < -0.05) trend = "<span style='color:#22c55e'>↗ Improving</span>"
+      else                         trend = "<span style='color:#6b7280'>→ Stable</span>"
+    }
+
+    const tr = document.createElement("tr")
+    if (i === 0) tr.style.background = "rgba(250,204,21,.05)"
+    tr.innerHTML = `
+      <td style="font-weight:700;color:${i===0?'#facc15':'#6b7280'}">${i===0?"🥇":"P"+(i+1)}</td>
+      <td><div style="display:flex;align-items:center;gap:9px">
+        <div style="width:4px;height:22px;border-radius:3px;background:${col};flex-shrink:0"></div>
+        <span style="font-weight:700;color:${col}">${d.driver_code}</span>
+      </div></td>
+      <td style="font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:.2px">${secsToLapStr(d.avg_pace_3)}</td>
+      <td>${deltaStr}</td>
+      <td><span class="tyre ${tyreClass(d.compound)}">${d.compound||"–"}</span></td>
+      <td style="font-size:12px">${trend}</td>
+    `
+    body.appendChild(tr)
+  })
+}
+
+
+
+// ── Degradation Table ─────────────────────────────────────────────────────
+function renderDegTable(classified) {
+  const body = document.getElementById("degBody")
+  body.innerHTML = ""
+  const sorted = [...classified].sort((a,b) => (b.tyre_deg||0) - (a.tyre_deg||0))
+  sorted.forEach(d => {
+    const col    = teamColors[d.driver_code]||"#888"
+    const ws     = pitWindowStatus((d.compound||"").toUpperCase(), d.tyre_age||0)
+    const assess = degAssessment(d.tyre_deg)
+    const tr = document.createElement("tr")
+    tr.innerHTML = `
+      <td><span style="font-weight:700;color:${col}">${d.driver_code}</span></td>
+      <td><span class="tyre ${tyreClass(d.compound)}">${d.compound||"–"}</span></td>
+      <td>${d.tyre_age||"–"}</td>
+      <td><span class="deg-badge" style="color:${degColor(d.tyre_deg)}">${degText(d.tyre_deg)}</span></td>
+      <td><span style="font-size:11px;color:#9ca3af">${ws.text}</span></td>
+      <td>${assess.label}</td>
+    `
+    body.appendChild(tr)
+  })
+}
+
+// ── Live Table ─────────────────────────────────────────────────────────────
+function renderLiveTable(classified, dnfDrivers) {
+  const body = document.getElementById("tableBody")
+  body.innerHTML = ""
+
+  function row(d, isDnf) {
+    const name    = d.driver_code||"-"
+    const col     = teamColors[name]||"#888"
+    const compound= d.compound||"–"
+    const age     = d.tyre_age||"–"
+    const pits    = (d.stint??1)-1
+    const lap     = d.lap_number||"–"
+    const lastLap = d.last_lap||"–"
+    const reason  = d.retire_reason||"DNF"
+    const dnfLap  = d.dnf_lap ? `Lap ${d.dnf_lap}` : "–"
+
+    // position change
+    let chgCell = ""
+    if (!isDnf && d.position) {
+      const prev = prevPositions[name]
+      if (prev !== undefined) {
+        const delta = prev - d.position
+        if (delta > 0)      chgCell = `<span class="pos-chg pos-up">▲${delta}</span>`
+        else if (delta < 0) chgCell = `<span class="pos-chg pos-dn">▼${Math.abs(delta)}</span>`
+        else                chgCell = `<span class="pos-chg pos-eq">–</span>`
+      }
+      prevPositions[name] = d.position
+    }
+
+    const tr = document.createElement("tr")
+    if (isDnf) tr.className = "row-dnf"
+    tr.innerHTML = `
+      <td>${isDnf ? '<span class="dnf-badge">DNF</span>' : `<span class="pos-num">${d.position}</span>`}</td>
+      <td>${chgCell}</td>
+      <td><div class="driver-cell"><div class="team-bar" style="background:${col}"></div><span class="driver-code">${name}</span></div></td>
+      <td>${compound!=="–" ? `<span class="tyre ${tyreClass(compound)}">${compound}</span>` : "–"}</td>
+      <td>${isDnf ? dnfLap : age}</td>
+      <td>${isDnf ? "–" : pits}</td>
+      <td>${isDnf ? "–" : lap}</td>
+      <td><span class="gap-val">${isDnf?"–":formatGap(d.gap_to_ahead)}</span></td>
+      <td><span class="gap-val">${isDnf?"–":formatGap(d.gap_to_leader)}</span></td>
+      <td style="font-variant-numeric:tabular-nums">${lastLap}</td>
+      <td><span class="deg-badge" style="color:${degColor(d.tyre_deg)}">${isDnf?"–":degText(d.tyre_deg)}</span></td>
+      <td>
+        <div class="trendBox">
+          <canvas id="g${d.driver_number}" width="80" height="28"></canvas>
+          <div class="lapTime">${lastLap}</div>
+        </div>
+      </td>
+      <td>${isDnf ? `<small style="color:#9ca3af">${reason} · ${dnfLap}</small>` : "–"}</td>
+    `
+    body.appendChild(tr)
+
+    if (!isDnf && d.lap_history?.length > 1) {
+      const key = "g"+d.driver_number
+      if (chartInstances[key]) chartInstances[key].destroy()
+      const cnv = document.getElementById(key)
+      chartInstances[key] = new Chart(cnv, {
+        type:"line",
+        data:{labels:d.lap_history,datasets:[{data:d.lap_history,borderColor:col,borderWidth:2,pointRadius:0,tension:.3}]},
+        options:{responsive:false,animation:false,plugins:{legend:{display:false}},scales:{x:{display:false},y:{display:false}}}
+      })
+    }
+  }
+
+  classified.forEach(d => row(d, false))
+  if (dnfDrivers.length) {
+    const sep = document.createElement("tr")
+    sep.className = "dnf-sep"
+    sep.innerHTML = `<td colspan="13">⛔ Retired / DNF</td>`
+    body.appendChild(sep)
+    dnfDrivers.forEach(d => row(d, true))
+  }
+}
+
+// ── Main load ──────────────────────────────────────────────────────────────
+async function loadData() {
+  let data
+  try {
+    const res = await fetch(DATA_URL + "?t=" + Date.now())
+    data = await res.json()
+  } catch {
+    const s = document.getElementById("raceStatus")
+    s.textContent = "⚠️  Waiting for data server…"; s.className = "s-yellow"; return
+  }
+
+  if (data.session) document.getElementById("headerTitle").textContent = data.session
+  if (data.timestamp) {
+    const ts = new Date(data.timestamp*1000).toLocaleTimeString()
+    document.getElementById("lastUpdate").textContent = "Updated "+ts
+    document.getElementById("footerUpdate").textContent = "Last fetched: "+ts
+  }
+
+  // Status
+  const s = document.getElementById("raceStatus")
+  if (data.red_flag)           { s.textContent="🔴  RED FLAG";             s.className="s-red"    }
+  else if (data.safety_car)    { s.textContent="🟡  SAFETY CAR";           s.className="s-yellow" }
+  else if (data.virtual_safety_car) { s.textContent="🟠  VIRTUAL SAFETY CAR"; s.className="s-orange" }
+  else                         { s.textContent="🟢  GREEN FLAG";            s.className="s-green"  }
+
+  drawTrack(data)
+
+  const classified  = (data.drivers||[]).filter(d => !d.retired && d.position!=null).sort((a,b)=>a.position-b.position)
+  const dnfDrivers  = (data.drivers||[]).filter(d => d.retired)
+
+  renderLiveTable(classified, dnfDrivers)
+  updateFastestLap(classified)
+  generateInsights(classified)
+  renderPitWindows(classified)
+  drawStintGantt(classified)
+  renderUndercut(classified)
+  renderOvercut(classified)
+  renderPaceTable(classified)
+  renderDegTable(classified)
+  renderSectorTimes(classified)
+}
+
+setInterval(loadData, 5000)
+loadData()
+</script>
+</body>
+</html>

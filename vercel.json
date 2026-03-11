@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "api/race_data.py": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/dashboard.html" }
+  ]
+}
