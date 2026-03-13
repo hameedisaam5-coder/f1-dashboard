@@ -1,0 +1,14 @@
+{
+  "name": "F1 Strategy Dashboard",
+  "short_name": "F1 Dashboard",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#e10600",
+  "background_color": "#15151e",
+  "display": "standalone"
+}
