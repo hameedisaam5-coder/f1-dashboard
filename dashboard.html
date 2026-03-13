@@ -1137,6 +1137,15 @@ async function loadData() {
     s.textContent = "⚠️  Waiting for data server…"; s.className = "s-yellow"; return
   }
 
+  if (data.error) {
+    const s = document.getElementById("raceStatus")
+    s.textContent = "⚠️  " + data.error; 
+    s.className = "s-red";
+    document.getElementById("tableBody").innerHTML = "";
+    document.getElementById("insightsGrid").innerHTML = `<div class="insight-card"><div class="insight-icon">⚠️</div><div class="insight-text">${data.error}</div></div>`;
+    return;
+  }
+
   if (data.session) document.getElementById("headerTitle").textContent = data.session
   if (data.timestamp) {
     const ts = new Date(data.timestamp*1000).toLocaleTimeString()
