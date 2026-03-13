@@ -6,7 +6,7 @@
 <title>F1 Strategy Dashboard 2026</title>
 <meta name="description" content="Near-live F1 strategy analysis dashboard.">
 <link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/commons/3/33/F1.svg">
-<link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/3/33/F1.svg">
+<link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/F1.svg/192px-F1.svg.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&display=swap" rel="stylesheet">
@@ -164,7 +164,11 @@ tr:hover td{background:rgba(255,255,255,.04)}
     <div class="header-sub">Near-live / 5s sync</div>
   </div>
   <img src="https://upload.wikimedia.org/wikipedia/commons/3/33/F1.svg" class="header-logo" alt="F1 Logo">
-  <div class="header-right">
+  <div class="header-right" style="gap: 12px;">
+    <select id="sessionToggle" style="background:#1a1a24;color:#f3f4f6;border:1px solid #2a2a35;border-radius:4px;padding:4px 8px;font-family:inherit;font-size:12px;font-weight:600;outline:none;cursor:pointer;">
+      <option value="R">Grand Prix</option>
+      <option value="S">Sprint</option>
+    </select>
     <span id="lastUpdate"></span>
   </div>
 </div>
@@ -474,9 +478,13 @@ tr:hover td{background:rgba(255,255,255,.04)}
 </div>
 
 <script>
-const DATA_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-  ? "http://localhost:8000/race_data.json"   // local dev
-  : "/api/race_data"                          // Vercel production
+function getFetchUrl() {
+  const sessionType = document.getElementById("sessionToggle")?.value || "R";
+  const baseUrl = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://localhost:8000/race_data.json"   // local dev
+    : "/api/race_data";                        // Vercel production
+  return baseUrl + "?session=" + sessionType;
+}
 
 // 2026 teams
 const teamColors = {
@@ -1121,7 +1129,8 @@ function renderLiveTable(classified, dnfDrivers) {
 async function loadData() {
   let data
   try {
-    const res = await fetch(DATA_URL + "?t=" + Date.now())
+    const url = getFetchUrl() + (getFetchUrl().includes("?") ? "&" : "?") + "t=" + Date.now();
+    const res = await fetch(url)
     data = await res.json()
   } catch {
     const s = document.getElementById("raceStatus")
@@ -1160,6 +1169,12 @@ async function loadData() {
 }
 
 setInterval(loadData, 5000)
+document.getElementById("sessionToggle").addEventListener("change", () => {
+  const s = document.getElementById("raceStatus");
+  s.textContent = "⏳ Fetching data...";
+  s.className = "s-yellow";
+  loadData();
+});
 loadData()
 </script>
 </body>
