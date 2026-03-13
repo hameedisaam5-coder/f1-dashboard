@@ -2,12 +2,13 @@ import fastf1
 import pandas as pd
 import json
 import time
+import sys
 
 fastf1.Cache.enable_cache("cache")
 
 YEAR = 2026
 RACE = "Australia"
-SESSION = "R"
+SESSION = sys.argv[1].upper() if len(sys.argv) > 1 else "R"
 
 print("Loading session...")
 session = fastf1.get_session(YEAR, RACE, SESSION)

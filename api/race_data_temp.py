@@ -8,7 +8,6 @@ import os
 import json
 import time
 import pandas as pd
-from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler
 
 # ── FastF1 setup ────────────────────────────────────────────────────────────
@@ -20,6 +19,8 @@ fastf1.Cache.enable_cache(CACHE_DIR)
 
 # ── Race auto-detection ──────────────────────────────────────────────────────
 import datetime
+
+SESSION_TYPE = os.environ.get("F1sess", "R")
 
 # Override for manual control (set in Vercel env vars to lock a specific race)
 _MANUAL_YEAR = os.environ.get("F1_YEAR")
@@ -65,11 +66,11 @@ def get_current_race():
 
 
 # ── Module-level cache (survives across warm invocations) ───────────────────
-_sessions       = {}   # Keys are session types e.g. "R", "S"
-_track_x        = {}
-_track_y        = {}
-_last_fetch     = {}
-_cached_json    = {}
+sess        = None
+_track_x        = []
+_track_y        = []
+_last_fetch     = 0
+_cached_json    = None
 _loaded_race    = None      # tracks which race is currently loaded
 CACHE_TTL_SECS  = 8         # re-fetch data at most every 8 s
 
@@ -94,11 +95,11 @@ def linear_slope(values):
     return (n * sxy - sx * sy) / denom if denom else None
 
 
-def is_retired(sess, driver_number):
+def is_retired(session, driver_number):
     try:
-        if hasattr(sess, "results") and not sess.results.empty:
-            dr = sess.results[
-                sess.results["DriverNumber"].astype(str) == str(driver_number)
+        if hasattr(session, "results") and not session.results.empty:
+            dr = session.results[
+                session.results["DriverNumber"].astype(str) == str(driver_number)
             ]
             if not dr.empty:
                 st = str(dr.iloc[0].get("Status", "") or "")
@@ -110,46 +111,38 @@ def is_retired(sess, driver_number):
 
 
 # ── Core data fetch ─────────────────────────────────────────────────────────
-def build_race_data(session_type="R"):
-    global _sessions, _track_x, _track_y, _loaded_race
+def build_race_data():
+    global sess, _track_x, _track_y, _loaded_race
 
     year, race = get_current_race()
     race_key   = f"{year}:{race}"
 
     # Reset session if the race weekend has changed
     if _loaded_race != race_key:
-        _sessions    = {}
-        _track_x     = {}
-        _track_y     = {}
+        sess     = None
+        _track_x     = []
+        _track_y     = []
         _loaded_race = race_key
         print(f"Race changed to: {race_key}")
 
     # Load / refresh session
-    if session_type not in _sessions:
-        sess = fastf1.get_session(year, race, session_type)
+    if sess is None:
+        sess = fastf1.getsess(year, race, SESSION_TYPE)
         sess.load()
-        _sessions[session_type] = sess
         # Build track layout once
         try:
             fastest = sess.laps.pick_fastest()
             tel     = fastest.get_telemetry()
-            _track_x[session_type] = tel["X"].tolist()
-            _track_y[session_type] = tel["Y"].tolist()
+            _track_x = tel["X"].tolist()
+            _track_y = tel["Y"].tolist()
         except Exception as e:
             print("Track layout error:", e)
-            _track_x[session_type] = []
-            _track_y[session_type] = []
     else:
-        sess = _sessions[session_type]
         # Refresh live data only
         try:
             sess.load(livedata=None)
         except Exception as e:
             print("Session reload warning:", e)
-            
-    sess = _sessions.get(session_type)
-    if not sess:
-        raise Exception(f"Failed to load session type {session_type}")
 
     # ── Track status ────────────────────────────────────────────────────────
     safety_car = virtual_safety_car = red_flag = False
@@ -337,8 +330,8 @@ def build_race_data(session_type="R"):
         "safety_car":         safety_car,
         "virtual_safety_car": virtual_safety_car,
         "red_flag":           red_flag,
-        "track_x":            _track_x.get(session_type, []),
-        "track_y":            _track_y.get(session_type, []),
+        "track_x":            _track_x,
+        "track_y":            _track_y,
         "drivers":            classified + dnf_drivers,
     }
 
@@ -348,27 +341,17 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         global _last_fetch, _cached_json
 
-        parsed = urlparse(self.path)
-        qs = parse_qs(parsed.query)
-        session_type = qs.get("session", ["R"])[0].upper()
-        if session_type not in ["R", "S"]:
-            session_type = "R"
-
         now = time.time()
-        last = _last_fetch.get(session_type, 0)
-        cache = _cached_json.get(session_type)
-
-        if cache is None or (now - last) > CACHE_TTL_SECS:
+        if _cached_json is None or (now - _last_fetch) > CACHE_TTL_SECS:
             try:
-                data = build_race_data(session_type)
-                cache = json.dumps(data)
-                _cached_json[session_type] = cache
-                _last_fetch[session_type]  = now
+                data = build_race_data()
+                _cached_json = json.dumps(data)
+                _last_fetch  = now
             except Exception as e:
                 self._send(500, json.dumps({"error": str(e)}))
                 return
 
-        self._send(200, cache)
+        self._send(200, _cached_json)
 
     def _send(self, code, body):
         self.send_response(code)
