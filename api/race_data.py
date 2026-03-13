@@ -126,19 +126,25 @@ def build_race_data(session_type="R"):
 
     # Load / refresh session
     if session_type not in _sessions:
-        sess = fastf1.get_session(year, race, session_type)
-        sess.load()
-        _sessions[session_type] = sess
-        # Build track layout once
         try:
-            fastest = sess.laps.pick_fastest()
-            tel     = fastest.get_telemetry()
-            _track_x[session_type] = tel["X"].tolist()
-            _track_y[session_type] = tel["Y"].tolist()
-        except Exception as e:
-            print("Track layout error:", e)
-            _track_x[session_type] = []
-            _track_y[session_type] = []
+            sess = fastf1.get_session(year, race, session_type)
+            sess.load()
+            _sessions[session_type] = sess
+            # Build track layout once
+            try:
+                fastest = sess.laps.pick_fastest()
+                tel     = fastest.get_telemetry()
+                _track_x[session_type] = tel["X"].tolist()
+                _track_y[session_type] = tel["Y"].tolist()
+            except Exception as e:
+                print("Track layout error:", e)
+                _track_x[session_type] = []
+                _track_y[session_type] = []
+        except ValueError as e:
+            # e.g., "Session type 'S' does not exist for this event"
+            print("Session lookup error:", e)
+            _sessions[session_type] = None
+            raise ValueError(f"Session {session_type} is not available for {year} {race}.")
     else:
         sess = _sessions[session_type]
         # Refresh live data only
