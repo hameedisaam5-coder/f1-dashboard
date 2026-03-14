@@ -63,8 +63,19 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
             y_raw = all_tel["Y"].to_numpy(dtype=float)
             s_raw = all_tel["Speed"].to_numpy(dtype=float)
             thr_raw = all_tel["Throttle"].to_numpy(dtype=float)
-            brk_raw = all_tel["Brake"].to_numpy(dtype=float)
+            
+            # Brake can be boolean (True/False) or float (percentage), force to 0-100
+            if all_tel["Brake"].dtype == bool:
+                brk_raw = all_tel["Brake"].to_numpy(dtype=int) * 100
+            else:
+                brk_raw = all_tel["Brake"].to_numpy(dtype=float)
+                
             ger_raw = all_tel["nGear"].to_numpy(dtype=float)
+            
+            if "Distance" in all_tel.columns:
+                dst_raw = all_tel["Distance"].to_numpy(dtype=float)
+            else:
+                dst_raw = np.zeros(len(t_raw))
             
             drv_session_times = drv_laps["Time"].dt.total_seconds().to_numpy()
             drv_lap_nums = drv_laps["LapNumber"].to_numpy()
@@ -83,6 +94,7 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
             thr_samples = np.interp(t_samples, t_raw, thr_raw)
             brk_samples = np.interp(t_samples, t_raw, brk_raw)
             ger_samples = np.round(np.interp(t_samples, t_raw, ger_raw))
+            dst_samples = np.interp(t_samples, t_raw, dst_raw)
             
             # For each t_sample, find which lap it belongs to (SessionTime is lap end time)
             lap_indices = np.searchsorted(drv_session_times, t_samples)
@@ -102,6 +114,7 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
                     "t":     int(thr_samples[i]),
                     "b":     int(brk_samples[i]),
                     "g":     int(ger_samples[i]),
+                    "d":     float(dst_samples[i]),
                     "tyre":  str(c_s)[0] if c_s and str(c_s) != "nan" else "?",
                     "lap":   int(l_s) if l_s and str(l_s) != "nan" else 0,
                 }

@@ -514,11 +514,13 @@ function getInterpolatedDrivers() {
       t: Math.round(d0.t + ((d1.t || 0) - d0.t) * frac) || 0,
       b: Math.round(d0.b + ((d1.b || 0) - d0.b) * frac) || 0,
       g: frac < 0.5 ? d0.g : d1.g,
+      d: (d0.d || 0) + (((d1.d || 0) - (d0.d || 0)) * frac),
       tyre: d0.tyre
     })
   })
   
-  return result.sort((a,b) => b.lap - a.lap)
+  // Sort by strictly driven cumulative distance (True race position)
+  return result.sort((a,b) => b.d - a.d)
 }
 
 function drawFrame() {
@@ -619,17 +621,22 @@ function drawFrame() {
   const secs = String(Math.floor(currentRealTime%60)).padStart(2,"0")
   document.getElementById("dispTime").textContent = mins+":"+secs
 
-  // 4. Update Telemetry Panel (Use Leader)
+  // 4. Update Telemetry Panel (Use Selected or Leader)
   if (drivers.length > 0) {
-    const leader = drivers[0]
-    const telCol = teamColors[leader.code] || "#e10600"
-    document.getElementById("telDriverName").textContent = leader.code
+    let telDriver = drivers[0]
+    if (selectedDrivers.length > 0) {
+      const sel = drivers.find(d => d.code === selectedDrivers[0])
+      if (sel) telDriver = sel
+    }
+    
+    const telCol = teamColors[telDriver.code] || "#e10600"
+    document.getElementById("telDriverName").textContent = telDriver.code
     document.getElementById("telDriverName").style.color = telCol
-    document.getElementById("telSpeed").textContent = Math.max(0, leader.s || 0)
-    document.getElementById("telGear").textContent = (leader.g || 0) === 0 ? "N" : leader.g
+    document.getElementById("telSpeed").textContent = Math.max(0, telDriver.s || 0)
+    document.getElementById("telGear").textContent = (telDriver.g || 0) === 0 ? "N" : telDriver.g
     // Cap throttle/brake visual to 0-100%
-    const tPct = Math.min(100, Math.max(0, leader.t || 0))
-    const bPct = Math.min(100, Math.max(0, leader.b || 0))
+    const tPct = Math.min(100, Math.max(0, telDriver.t || 0))
+    const bPct = Math.min(100, Math.max(0, telDriver.b || 0))
     document.getElementById("telThr").style.width = tPct + "%"
     document.getElementById("telBrk").style.width = bPct + "%"
   }
