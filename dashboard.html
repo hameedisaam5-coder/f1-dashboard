@@ -610,31 +610,40 @@ function drawTrack(data) {
   function proj(xi,yi) {
     return { x:(xi-minX)*scale+offX, y:canvas.height-((yi-minY)*scale+offY) }
   }
+  const n = tx.length
+  
+  // Build continuous track path
+  const trackPath = new Path2D();
+  let firstPos = proj(tx[0], ty[0]);
+  trackPath.moveTo(firstPos.x, firstPos.y);
+  for (let i=1; i<n; i++) {
+    const p = proj(tx[i], ty[i]);
+    trackPath.lineTo(p.x, p.y);
+  }
+  trackPath.closePath();
 
-  const n   = tx.length
-  const s1  = Math.floor(n/3), s2 = Math.floor(2*n/3)
-  const segs = [
-    {from:0,   to:s1,   col:"#a855f7"},
-    {from:s1,  to:s2,   col:"#facc15"},
-    {from:s2,  to:n-1,  col:"#ef4444"},
-  ]
+  ctx.lineJoin="round"; ctx.lineCap="round";
 
-  ctx.shadowBlur=7; ctx.shadowColor="rgba(150,150,255,.2)"
-  ctx.lineCap="round"; ctx.lineJoin="round"
+  // 1. Outer glow
+  ctx.shadowColor = "rgba(255, 255, 255, 0.15)";
+  ctx.shadowBlur = 12;
+  // Outer border (track edge)
+  ctx.strokeStyle = "#4b5563"; 
+  ctx.lineWidth = 12;
+  ctx.stroke(trackPath);
+  ctx.shadowBlur = 0; 
 
-  segs.forEach(seg => {
-    ctx.beginPath(); ctx.strokeStyle=seg.col; ctx.lineWidth=4
-    for (let i=seg.from;i<=seg.to;i++) {
-      const p=proj(tx[i],ty[i])
-      i===seg.from ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y)
-    }
-    ctx.stroke()
-  })
-  // close track
-  const pL=proj(tx[n-1],ty[n-1]),p0=proj(tx[0],ty[0])
-  ctx.beginPath(); ctx.strokeStyle="#ef4444"; ctx.lineWidth=4
-  ctx.moveTo(pL.x,pL.y); ctx.lineTo(p0.x,p0.y); ctx.stroke()
-  ctx.shadowBlur=0
+  // 2. Inner asphalt
+  ctx.strokeStyle = "#111827"; 
+  ctx.lineWidth = 8;
+  ctx.stroke(trackPath);
+
+  // 3. Center dashed line
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 6]);
+  ctx.stroke(trackPath);
+  ctx.setLineDash([]);
 
   // S/F marker
   const sf=proj(tx[0],ty[0]), p1=proj(tx[1],ty[1])
