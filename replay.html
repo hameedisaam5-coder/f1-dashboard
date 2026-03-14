@@ -114,6 +114,16 @@
     .tel-bar-bg { flex: 1; height: 10px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden; }
     .tel-bar-fill { height: 100%; transition: width 0.1s linear; }
 
+    /* Chart Panel */
+    .chart-panel {
+      bottom: 130px; left: 20px; right: 300px; height: 150px;
+      padding: 12px; display: flex; flex-direction: column;
+    }
+    .chart-header {
+      font-size: 11px; font-weight: 700; color: #9ca3af; letter-spacing: 1px; margin-bottom: 8px;
+    }
+    .chart-container { flex: 1; position: relative; }
+
     .info-row {
       display: flex; justify-content: space-between; align-items: center;
       font-weight: 700;
@@ -183,7 +193,8 @@
     }
     a.back-link:hover { color: #fff; }
   </style>
-</head>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
 <body>
 
   <!-- Fullscreen Canvas -->
@@ -220,6 +231,14 @@
       <button class="btn-icon" onclick="seek(15)" title="Forward 15s">⏩</button>
       <button class="speed-btn" id="btnSpeed" onclick="cycleSpeed()">1×</button>
       <input type="range" id="scrubber" min="0" max="1000" value="0">
+    </div>
+  </div>
+
+  <!-- Chart Panel -->
+  <div class="glass-panel chart-panel" id="chartPanel" style="display:none">
+    <div class="chart-header">SPEED TRACE (LAST 30s)</div>
+    <div class="chart-container">
+      <canvas id="telChartCanvas"></canvas>
     </div>
   </div>
 
@@ -279,12 +298,16 @@ updateRaces()
 // --- State ---
 let replayData = null
 let playing = false
-let currentRealTime = 0 // The exact continuous time in seconds (interpolated)
+let currentRealTime = 0 
 let lastTickTime = 0
 let speeds = [0.5, 1, 2, 4, 8, 16]
 let speedIdx = 1
 let speed = speeds[speedIdx]
 let reqAnimFrame = null
+
+let selectedDrivers = []
+let chartInstance = null
+Chart.defaults.color = "#9ca3af"
 
 const canvas = document.getElementById('replayCanvas')
 const ctx = canvas.getContext('2d')
@@ -363,6 +386,10 @@ async function loadReplay() {
     document.getElementById("lbPanel").style.display = "flex"
     document.getElementById("controlsPanel").style.display = "flex"
     document.getElementById("telemetryPanel").style.display = "flex"
+    document.getElementById("chartPanel").style.display = "flex"
+    
+    selectedDrivers = []
+    initChart()
     
     drawFrame()
 
@@ -393,6 +420,37 @@ function seek(delta) {
   const max = (replayData.frames.length - 1) * replayData.frame_step
   currentRealTime = Math.max(0, Math.min(max, currentRealTime + delta))
   drawFrame()
+}
+
+function toggleDriver(code) {
+  if (selectedDrivers.includes(code)) {
+    selectedDrivers = selectedDrivers.filter(c => c !== code)
+  } else {
+    selectedDrivers.push(code)
+  }
+  drawFrame()
+}
+
+function initChart() {
+  if (chartInstance) chartInstance.destroy()
+  const ctx = document.getElementById('telChartCanvas').getContext('2d')
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: false, parsing: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false }
+      },
+      scales: {
+        x: { display: false },
+        y: { min: 0, max: 350, grid: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  })
 }
 
 // --- 60FPS Engine ---
@@ -579,7 +637,10 @@ function drawFrame() {
   // 5. Update Leaderboard HTML
   document.getElementById("lbContent").innerHTML = drivers.map((d,i) => {
     const col = teamColors[d.code] || "#888"
-    return `<div class="lb-row">
+    const isSel = selectedDrivers.includes(d.code)
+    const bg = isSel ? "rgba(255,255,255,0.15)" : "transparent"
+    const bd = isSel ? `border: 1px solid ${col};` : "border: 1px solid transparent;"
+    return `<div class="lb-row" style="cursor:pointer; background:${bg}; ${bd} border-radius:4px" onclick="toggleDriver('${d.code}')">
       <div class="lb-pos">${i+1}</div>
       <div class="lb-bar" style="background:${col}"></div>
       <div class="lb-code" style="color:${col}">${d.code}</div>
@@ -587,6 +648,34 @@ function drawFrame() {
       <div class="lb-tyre tyre-${d.tyre}">${d.tyre}</div>
     </div>`
   }).join("")
+
+  // 6. Update Chart
+  if (chartInstance) {
+    const targets = selectedDrivers.length > 0 ? selectedDrivers : (drivers.length > 0 ? [drivers[0].code] : [])
+    const HISTORY_SECS = 30
+    const POINTS = 60
+    
+    chartInstance.data.labels = new Array(POINTS).fill("")
+    chartInstance.data.datasets = targets.map(code => {
+      const hist = []
+      for (let i = POINTS - 1; i >= 0; i--) {
+        const pastTime = Math.max(0, currentRealTime - i * (HISTORY_SECS / POINTS))
+        const frameIdx = Math.floor(pastTime / replayData.frame_step)
+        const frame = replayData.frames[frameIdx] || []
+        const d = frame.find(x => x.code === code)
+        hist.push(d ? d.s : null)
+      }
+      return {
+        label: code,
+        data: hist,
+        borderColor: teamColors[code] || '#fff',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.1
+      }
+    })
+    chartInstance.update('none')
+  }
 }
 
 // Map Pan/Zoom (Mouse & Touch)
