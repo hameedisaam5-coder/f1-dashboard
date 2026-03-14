@@ -63,6 +63,8 @@
     .lb-content {
       overflow-y: auto;
       padding: 8px 0;
+      display: flex;
+      flex-direction: column;
     }
     .lb-content::-webkit-scrollbar { width: 4px; }
     .lb-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
@@ -641,20 +643,36 @@ function drawFrame() {
     document.getElementById("telBrk").style.width = bPct + "%"
   }
 
-  // 5. Update Leaderboard HTML
-  document.getElementById("lbContent").innerHTML = drivers.map((d,i) => {
-    const col = teamColors[d.code] || "#888"
-    const isSel = selectedDrivers.includes(d.code)
-    const bg = isSel ? "rgba(255,255,255,0.15)" : "transparent"
-    const bd = isSel ? `border: 1px solid ${col};` : "border: 1px solid transparent;"
-    return `<div class="lb-row" style="cursor:pointer; background:${bg}; ${bd} border-radius:4px" onclick="toggleDriver('${d.code}')">
-      <div class="lb-pos">${i+1}</div>
-      <div class="lb-bar" style="background:${col}"></div>
-      <div class="lb-code" style="color:${col}">${d.code}</div>
-      <div class="lb-lap">L${d.lap}</div>
-      <div class="lb-tyre tyre-${d.tyre}">${d.tyre}</div>
-    </div>`
-  }).join("")
+  // 5. Update Leaderboard HTML (Persistent DOM)
+  const lbContent = document.getElementById("lbContent")
+  if (!lbContent.hasChildNodes() || lbContent.children.length !== drivers.length) {
+    lbContent.innerHTML = drivers.map(d => {
+      const col = teamColors[d.code] || "#888"
+      return `<div class="lb-row" id="lb-row-${d.code}" style="cursor:pointer; border-radius:4px" onclick="toggleDriver('${d.code}')">
+        <div class="lb-pos" id="lb-pos-${d.code}"></div>
+        <div class="lb-bar" style="background:${col}"></div>
+        <div class="lb-code" style="color:${col}">${d.code}</div>
+        <div class="lb-lap" id="lb-lap-${d.code}"></div>
+        <div class="lb-tyre" id="lb-tyre-${d.code}"></div>
+      </div>`
+    }).join("")
+  }
+
+  drivers.forEach((d, i) => {
+    const row = document.getElementById(`lb-row-${d.code}`)
+    if (row) {
+      row.style.order = i
+      document.getElementById(`lb-pos-${d.code}`).textContent = i + 1
+      document.getElementById(`lb-lap-${d.code}`).textContent = `L${d.lap}`
+      const tEl = document.getElementById(`lb-tyre-${d.code}`)
+      tEl.textContent = d.tyre
+      tEl.className = `lb-tyre tyre-${d.tyre}`
+      
+      const isSel = selectedDrivers.includes(d.code)
+      row.style.background = isSel ? "rgba(255,255,255,0.15)" : "transparent"
+      row.style.border = isSel ? `1px solid ${teamColors[d.code] || '#888'}` : "1px solid transparent"
+    }
+  })
 
   // 6. Update Chart
   if (chartInstance) {
@@ -662,8 +680,26 @@ function drawFrame() {
     const HISTORY_SECS = 30
     const POINTS = 60
     
-    chartInstance.data.labels = new Array(POINTS).fill("")
-    chartInstance.data.datasets = targets.map(code => {
+    // Check if targets changed to avoid full dataset rebuild
+    const currentTargets = chartInstance.data.datasets.map(d => d.label).join(",")
+    const newTargets = targets.join(",")
+    
+    if (currentTargets !== newTargets) {
+      chartInstance.data.datasets = targets.map(code => ({
+        label: code,
+        data: new Array(POINTS).fill(null),
+        borderColor: teamColors[code] || '#fff',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.1,
+        spanGaps: true
+      }))
+    }
+
+    const labels = new Array(POINTS).fill("")
+    chartInstance.data.labels = labels
+
+    targets.forEach((code, dIdx) => {
       const hist = []
       for (let i = POINTS - 1; i >= 0; i--) {
         const pastTime = Math.max(0, currentRealTime - i * (HISTORY_SECS / POINTS))
@@ -672,15 +708,9 @@ function drawFrame() {
         const d = frame.find(x => x.code === code)
         hist.push(d ? d.s : null)
       }
-      return {
-        label: code,
-        data: hist,
-        borderColor: teamColors[code] || '#fff',
-        borderWidth: 2,
-        pointRadius: 0,
-        tension: 0.1
-      }
+      chartInstance.data.datasets[dIdx].data = hist
     })
+    
     chartInstance.update('none')
   }
 }

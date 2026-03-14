@@ -20,7 +20,7 @@ os.makedirs(REPLAY_DIR, exist_ok=True)
 fastf1.Cache.enable_cache(CACHE_DIR)
 
 def build_replay_data(year: int, race: str, session_type: str) -> dict:
-    cache_key  = hashlib.md5(f"{year}:{race}:{session_type}:v5".encode()).hexdigest()
+    cache_key  = hashlib.md5(f"{year}:{race}:{session_type}:v6".encode()).hexdigest()
     cache_file = os.path.join(REPLAY_DIR, f"{cache_key}.pkl")
 
     if os.path.exists(cache_file):
