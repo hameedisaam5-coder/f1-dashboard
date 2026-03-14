@@ -364,7 +364,7 @@ async function loadReplay() {
   if (reqAnimFrame) cancelAnimationFrame(reqAnimFrame)
 
   try {
-    const res = await fetch(`/api/replay_data?year=${year}&race=${encodeURIComponent(race)}&session=${sess}`)
+    const res = await fetch(`/api/replay_data?year=${year}&race=${encodeURIComponent(race)}&session=${sess}&v=${Date.now()}`)
     const data = await res.json()
     if (data.error) throw new Error(data.error)
     
@@ -516,13 +516,37 @@ function getInterpolatedDrivers() {
       t: Math.round(d0.t + ((d1.t || 0) - d0.t) * frac) || 0,
       b: Math.round(d0.b + ((d1.b || 0) - d0.b) * frac) || 0,
       g: frac < 0.5 ? d0.g : d1.g,
-      d: (d0.d || 0) + (((d1.d || 0) - (d0.d || 0)) * frac),
       tyre: d0.tyre
     })
   })
   
   // Sort by strictly driven cumulative distance (True race position)
-  return result.sort((a,b) => b.d - a.d)
+  // We use geometric projection onto the track coordinates for exact position
+  if (replayData.track_x && replayData.track_x.length > 0) {
+    const tx = replayData.track_x;
+    const ty = replayData.track_y;
+    const n = tx.length;
+    
+    result.forEach(d => {
+      let minDistSq = Infinity;
+      let bestIdx = 0;
+      for (let i = 0; i < n; i++) {
+        const dx = d.x - tx[i];
+        const dy = d.y - ty[i];
+        const distSq = dx*dx + dy*dy;
+        if (distSq < minDistSq) {
+          minDistSq = distSq;
+          bestIdx = i;
+        }
+      }
+      d.trackProg = bestIdx / n;
+    });
+  } else {
+    result.forEach(d => d.trackProg = 0);
+  }
+  
+  // Score = Lap + Completion. Higher score means further ahead.
+  return result.sort((a,b) => (b.lap + b.trackProg) - (a.lap + a.trackProg))
 }
 
 function drawFrame() {
