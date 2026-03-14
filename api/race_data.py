@@ -46,7 +46,8 @@ def get_current_race():
             if hasattr(event_date, "date"):
                 event_date = event_date.date()
             delta = (event_date - today).days
-            if -7 <= delta <= 4:          # race week window
+            # Pivot to next race on Wed/Thu before the race weekend
+            if -3 <= delta <= 4:
                 return year, row["EventName"]
 
         # Nothing ongoing — fall back to the most recent past round
