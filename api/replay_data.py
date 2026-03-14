@@ -66,7 +66,7 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
             brk_raw = all_tel["Brake"].to_numpy(dtype=float)
             ger_raw = all_tel["nGear"].to_numpy(dtype=float)
             
-            drv_session_times = drv_laps["SessionTime"].dt.total_seconds().to_numpy()
+            drv_session_times = drv_laps["Time"].dt.total_seconds().to_numpy()
             drv_lap_nums = drv_laps["LapNumber"].to_numpy()
             drv_compounds = drv_laps["Compound"].to_numpy()
 
