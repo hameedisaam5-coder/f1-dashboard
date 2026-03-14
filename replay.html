@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>F1 Race Replay</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/commons/3/33/F1.svg">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Outfit:wght@800;900&display=swap');
+    
+    * { box-sizing: border-box; }
+    body, html {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      background: #050508;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      overflow: hidden; /* No scrolling, full screen canvas */
+    }
+
+    #replayCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 1;
+      cursor: grab;
+    }
+    #replayCanvas:active { cursor: grabbing; }
+
+    /* Glassmorphism panels */
+    .glass-panel {
+      background: rgba(13, 13, 26, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      position: absolute;
+      z-index: 10;
+    }
+
+    /* Top Bar */
+    .top-bar {
+      top: 20px; left: 20px;
+      display: flex; gap: 16px; align-items: center;
+      padding: 12px 20px;
+    }
+
+    /* Leaderboard */
+    .leaderboard {
+      top: 20px; right: 20px;
+      width: 260px;
+      max-height: calc(100vh - 140px);
+      display: flex; flex-direction: column;
+    }
+    .lb-header {
+      padding: 12px 16px;
+      font-size: 11px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: #9ca3af;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; justify-content: space-between;
+    }
+    .lb-content {
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .lb-content::-webkit-scrollbar { width: 4px; }
+    .lb-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+    .lb-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 16px;
+      font-size: 13px; font-weight: 600;
+    }
+    .lb-pos { width: 20px; color: #6b7280; font-size: 11px; text-align: right; }
+    .lb-bar { width: 3px; height: 16px; border-radius: 2px; }
+    .lb-code { flex: 1; text-transform: uppercase; }
+    .lb-lap { font-size: 11px; color: #9ca3af; width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
+    .lb-tyre { width: 14px; text-align: center; font-weight: 800; font-size: 11px; }
+    
+    .tyre-S { color: #ef4444; }
+    .tyre-M { color: #facc15; }
+    .tyre-H { color: #f3f4f6; }
+    .tyre-I { color: #38bdf8; }
+    .tyre-W { color: #3b82f6; }
+
+    /* Bottom Control Bar */
+    .bottom-bar {
+      bottom: 20px; left: 20px; right: 300px;
+      padding: 16px 24px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+
+    .info-row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-weight: 700;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .race-title { font-size: 16px; color: #f3f4f6; }
+    .lap-info { color: #9ca3af; font-size: 13px; font-variant-numeric: tabular-nums; }
+    
+    .controls-row {
+      display: flex; align-items: center; gap: 16px;
+    }
+
+    select {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: white; border-radius: 6px; padding: 6px 12px;
+      font-family: inherit; font-size: 12px; font-weight: 600; outline: none; cursor: pointer;
+    }
+    select:hover { background: rgba(255,255,255,0.1); }
+    option { background: #1a1a24; }
+
+    button {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: white; border-radius: 6px; padding: 6px 14px;
+      font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; transition: 0.1s;
+    }
+    button:hover { background: rgba(255,255,255,0.15); }
+    button:active { transform: scale(0.97); }
+    
+    button.primary {
+      background: #e10600; border-color: #ff1e1e; font-weight: 700;
+    }
+    button.primary:hover { background: #ff1a1a; box-shadow: 0 0 15px rgba(225,6,0,0.4); }
+
+    .btn-icon { width: 32px; padding: 0; height: 32px; font-size: 14px; }
+    .speed-btn { width: 44px; padding: 0; height: 32px; color: #facc15; font-size: 12px; font-weight: 800; }
+
+    input[type=range] {
+      -webkit-appearance: none; appearance: none; height: 6px; background: rgba(255,255,255,0.1);
+      border-radius: 3px; outline: none; flex: 1; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: #e10600; cursor: pointer; transition: transform 0.1s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+    /* Loading overlay */
+    #loader {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(5,5,8,0.9); z-index: 100;
+      display: none; align-items: center; justify-content: center; flex-direction: column;
+    }
+    .spinner {
+      width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1);
+      border-top-color: #e10600; border-radius: 50%; animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+
+    a.back-link {
+      color: #9ca3af; text-decoration: none; font-size: 12px; font-weight: 600;
+      display: flex; align-items: center; gap: 6px; padding: 8px 14px;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    a.back-link:hover { color: #fff; }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen Canvas -->
+  <canvas id="replayCanvas"></canvas>
+
+  <!-- Top Bar -->
+  <div class="glass-panel top-bar">
+    <a href="/" class="back-link">← Dashboard</a>
+    <select id="selYear"><option value="2026">2026</option><option value="2025" selected>2025</option></select>
+    <select id="selRace"></select>
+    <select id="selSession"><option value="R">Race</option><option value="S">Sprint</option><option value="Q">Qualifying</option></select>
+    <button class="primary" onclick="loadReplay()">LOAD REPLAY</button>
+  </div>
+
+  <!-- Leaderboard -->
+  <div class="glass-panel leaderboard" id="lbPanel" style="display:none">
+    <div class="lb-header">
+      <span>POS</span>
+      <span style="flex:1;text-align:center">DRIVER</span>
+      <span>TYRE</span>
+    </div>
+    <div class="lb-content" id="lbContent"></div>
+  </div>
+
+  <!-- Bottom Controls -->
+  <div class="glass-panel bottom-bar" id="controlsPanel" style="display:none">
+    <div class="info-row">
+      <div class="race-title" id="dispTitle">Australian Grand Prix</div>
+      <div class="lap-info">LAP <span id="dispLap" style="color:#fff">0</span> / <span id="dispTotal">0</span> <span style="margin:0 10px;color:rgba(255,255,255,0.2)">|</span> <span id="dispTime">00:00</span></div>
+    </div>
+    <div class="controls-row">
+      <button class="btn-icon" onclick="seek(-15)" title="Rawind 15s">⏪</button>
+      <button class="btn-icon primary" id="btnPlay" onclick="togglePlay()" style="width:48px;font-size:16px">▶</button>
+      <button class="btn-icon" onclick="seek(15)" title="Forward 15s">⏩</button>
+      <button class="speed-btn" id="btnSpeed" onclick="cycleSpeed()">1×</button>
+      <input type="range" id="scrubber" min="0" max="1000" value="0">
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <div style="font-weight:600;letter-spacing:1px" id="loadText">DOWNLOADING TELEMETRY...</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:8px">This takes ~30s on first load for a new race</div>
+  </div>
+
+<script>
+// --- Constants ---
+const teamColors = {
+  "RBR": "#3671C6", "VER": "#3671C6", "PER": "#3671C6", "LAW": "#3671C6", "HAD": "#3671C6",
+  "FER": "#E80020", "LEC": "#E80020", "HAM": "#E80020", "SAI": "#E80020",
+  "MCL": "#FF8000", "NOR": "#FF8000", "PIA": "#FF8000",
+  "MER": "#27F4D2", "RUS": "#27F4D2", "ANT": "#27F4D2",
+  "AST": "#229971", "ALO": "#229971", "STR": "#229971",
+  "ALB": "#121F45", "COL": "#121F45", "WIL": "#121F45",
+  "HUL": "#00E7DF", "KAG": "#00E7DF", "SAU": "#00E7DF", 
+  "TSU": "#6692FF", "GAS": "#6692FF", "RBU": "#6692FF",
+  "OCO": "#00AEEF", "BEA": "#00AEEF", "HAA": "#00AEEF",
+  "DOO": "#FF66C4", "BOR": "#FF66C4", "ALP": "#FF66C4"
+}
+
+const F1_CALENDAR = {
+  2026: ["Australian Grand Prix","Chinese Grand Prix","Japanese Grand Prix","Bahrain Grand Prix","Saudi Arabian Grand Prix","Miami Grand Prix","Emilia Romagna Grand Prix","Monaco Grand Prix","Spanish Grand Prix","Canadian Grand Prix","Austrian Grand Prix","British Grand Prix","Belgian Grand Prix","Hungarian Grand Prix","Dutch Grand Prix","Italian Grand Prix","Azerbaijan Grand Prix","Singapore Grand Prix","United States Grand Prix","Mexico City Grand Prix","São Paulo Grand Prix","Las Vegas Grand Prix","Qatar Grand Prix","Abu Dhabi Grand Prix"],
+  2025: ["Australian Grand Prix","Chinese Grand Prix","Japanese Grand Prix","Bahrain Grand Prix","Saudi Arabian Grand Prix","Miami Grand Prix","Emilia Romagna Grand Prix","Monaco Grand Prix","Spanish Grand Prix","Canadian Grand Prix","Austrian Grand Prix","British Grand Prix","Belgian Grand Prix","Hungarian Grand Prix","Dutch Grand Prix","Italian Grand Prix","Azerbaijan Grand Prix","Singapore Grand Prix","United States Grand Prix","Mexico City Grand Prix","São Paulo Grand Prix","Las Vegas Grand Prix","Qatar Grand Prix","Abu Dhabi Grand Prix"],
+}
+
+// UI Init
+function updateRaces() {
+  const y = document.getElementById("selYear").value
+  const races = F1_CALENDAR[y] || F1_CALENDAR[2025]
+  document.getElementById("selRace").innerHTML = races.map(r => `<option value="${r}">${r}</option>`).join("")
+}
+document.getElementById("selYear").addEventListener("change", updateRaces)
+updateRaces()
+
+// --- State ---
+let replayData = null
+let playing = false
+let currentRealTime = 0 // The exact continuous time in seconds (interpolated)
+let lastTickTime = 0
+let speeds = [0.5, 1, 2, 4, 8, 16]
+let speedIdx = 1
+let speed = speeds[speedIdx]
+let reqAnimFrame = null
+
+const canvas = document.getElementById('replayCanvas')
+const ctx = canvas.getContext('2d')
+
+// Pan & Zoom state
+let camera = { x: 0, y: 0, scale: 1 }
+let isDragging = false
+let dragStart = { x: 0, y: 0 }
+
+window.addEventListener('resize', resize)
+function resize() {
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
+  if (replayData && !playing) drawFrame()
+}
+resize()
+
+// Scrubber interacting
+const scrubber = document.getElementById("scrubber")
+let isScrubbing = false
+scrubber.addEventListener("mousedown", () => isScrubbing=true)
+scrubber.addEventListener("touchstart", () => isScrubbing=true)
+window.addEventListener("mouseup", () => {
+  if (isScrubbing) {
+    isScrubbing = false
+    lastTickTime = performance.now() // reset to avoid jump
+  }
+})
+window.addEventListener("touchend", () => {
+  if (isScrubbing) {
+    isScrubbing = false
+    lastTickTime = performance.now()
+  }
+})
+scrubber.addEventListener("input", (e) => {
+  if (!replayData) return
+  const total = (replayData.frames.length - 1) * replayData.frame_step
+  currentRealTime = (e.target.value / 1000) * total
+  drawFrame()
+})
+
+// --- API ---
+async function loadReplay() {
+  const year = document.getElementById("selYear").value
+  const race = document.getElementById("selRace").value
+  const sess = document.getElementById("selSession").value
+
+  document.getElementById("loader").style.display = "flex"
+  document.getElementById("lbPanel").style.display = "none"
+  document.getElementById("controlsPanel").style.display = "none"
+  playing = false
+  if (reqAnimFrame) cancelAnimationFrame(reqAnimFrame)
+
+  try {
+    const res = await fetch(`/api/replay_data?year=${year}&race=${encodeURIComponent(race)}&session=${sess}`)
+    const data = await res.json()
+    if (data.error) throw new Error(data.error)
+    
+    replayData = data
+    currentRealTime = 0
+    
+    // Auto-fit camera
+    const tx = data.track_x, ty = data.track_y
+    const minX = Math.min(...tx), maxX = Math.max(...tx)
+    const minY = Math.min(...ty), maxY = Math.max(...ty)
+    const cw = window.innerWidth, ch = window.innerHeight
+    const pad = 100
+    camera.scale = Math.min((cw-pad*2)/(maxX-minX), (ch-pad*2)/(maxY-minY))
+    camera.x = cw/2 - ((minX+maxX)/2)*camera.scale
+    camera.y = ch/2 + ((minY+maxY)/2)*camera.scale
+
+    document.getElementById("dispTitle").textContent = race
+    document.getElementById("dispTotal").textContent = data.total_laps || "--"
+    
+    document.getElementById("loader").style.display = "none"
+    document.getElementById("lbPanel").style.display = "flex"
+    document.getElementById("controlsPanel").style.display = "flex"
+    
+    drawFrame()
+
+  } catch (err) {
+    document.getElementById("loadText").textContent = "❌ ERROR: " + err.message
+  }
+}
+
+// --- Playback Controls ---
+function togglePlay() {
+  if (!replayData) return
+  playing = !playing
+  document.getElementById("btnPlay").textContent = playing ? "⏸" : "▶"
+  if (playing) {
+    lastTickTime = performance.now()
+    reqAnimFrame = requestAnimationFrame(tick)
+  }
+}
+
+function cycleSpeed() {
+  speedIdx = (speedIdx + 1) % speeds.length
+  speed = speeds[speedIdx]
+  document.getElementById("btnSpeed").textContent = speed + "×"
+}
+
+function seek(delta) {
+  if (!replayData) return
+  const max = (replayData.frames.length - 1) * replayData.frame_step
+  currentRealTime = Math.max(0, Math.min(max, currentRealTime + delta))
+  drawFrame()
+}
+
+// --- 60FPS Engine ---
+function tick(now) {
+  if (!playing || !replayData) return
+
+  const deltaMs = now - lastTickTime
+  lastTickTime = now
+
+  if (!isScrubbing) {
+    const maxRealTime = (replayData.frames.length - 1) * replayData.frame_step
+    currentRealTime += (deltaMs / 1000) * speed
+    
+    if (currentRealTime >= maxRealTime) {
+      currentRealTime = maxRealTime
+      playing = false
+      document.getElementById("btnPlay").textContent = "▶"
+    }
+    
+    // Update scrubber UI visually
+    scrubber.value = (currentRealTime / maxRealTime) * 1000
+  }
+
+  drawFrame()
+  if (playing) reqAnimFrame = requestAnimationFrame(tick)
+}
+
+function getInterpolatedDrivers() {
+  const step = replayData.frame_step
+  const maxIdx = replayData.frames.length - 1
+  
+  // Find which two frames we are between
+  const exactFrame = currentRealTime / step
+  const idx0 = Math.floor(exactFrame)
+  const idx1 = Math.min(idx0 + 1, maxIdx)
+  const frac = exactFrame - idx0
+
+  const f0 = replayData.frames[idx0] || []
+  const f1 = replayData.frames[idx1] || []
+  
+  // Build lookup map for the next frame
+  const nextPos = {}
+  f1.forEach(d => nextPos[d.code] = d)
+
+  const result = []
+  f0.forEach(d0 => {
+    const d1 = nextPos[d0.code]
+    if (!d1) return // Driver disappeared (DNF)
+    
+    // Smooth linear interpolation of coordinates
+    const curX = d0.x + (d1.x - d0.x) * frac
+    const curY = d0.y + (d1.y - d0.y) * frac
+    const curLap = frac < 0.5 ? d0.lap : d1.lap
+    
+    result.push({
+      code: d0.code,
+      x: curX,
+      y: curY,
+      lap: curLap,
+      tyre: d0.tyre
+    })
+  })
+  
+  return result.sort((a,b) => b.lap - a.lap)
+}
+
+function drawFrame() {
+  if (!replayData) return
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  
+  const sc = camera.scale
+  function projX(vx) { return vx * sc + camera.x }
+  function projY(vy) { return -vy * sc + camera.y } // Y is inverted in F1 world coords
+
+  // 1. Draw Track
+  const tx = replayData.track_x, ty = replayData.track_y
+  const n = tx.length
+  if (n) {
+    ctx.beginPath(); ctx.strokeStyle="#2a2a35"; ctx.lineWidth=12; ctx.lineJoin="round"; ctx.lineCap="round"
+    for (let i=0; i<n; i++) {
+        i===0 ? ctx.moveTo(projX(tx[i]), projY(ty[i])) : ctx.lineTo(projX(tx[i]), projY(ty[i]))
+    }
+    ctx.stroke()
+    // close loop
+    ctx.beginPath(); ctx.moveTo(projX(tx[n-1]), projY(ty[n-1])); ctx.lineTo(projX(tx[0]), projY(ty[0])); ctx.stroke()
+    
+    ctx.beginPath(); ctx.strokeStyle="#374151"; ctx.lineWidth=6; ctx.lineJoin="round"; ctx.lineCap="round"
+    for (let i=0; i<n; i++) {
+        i===0 ? ctx.moveTo(projX(tx[i]), projY(ty[i])) : ctx.lineTo(projX(tx[i]), projY(ty[i]))
+    }
+    ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(projX(tx[n-1]), projY(ty[n-1])); ctx.lineTo(projX(tx[0]), projY(ty[0])); ctx.stroke()
+
+    // S/F Line
+    const sfX=projX(tx[0]), sfY=projY(ty[0])
+    ctx.strokeStyle="#fff"; ctx.lineWidth=4
+    const p1X=projX(tx[5]), p1Y=projY(ty[5])
+    const ang=Math.atan2(p1Y-sfY, p1X-sfX)
+    const nx=Math.cos(ang+Math.PI/2)*20, ny=Math.sin(ang+Math.PI/2)*20
+    ctx.beginPath(); ctx.moveTo(sfX+nx, sfY+ny); ctx.lineTo(sfX-nx, sfY-ny); ctx.stroke()
+  }
+
+  // 2. Interpolate Driver Dots
+  const drivers = getInterpolatedDrivers()
+  
+  drivers.forEach(d => {
+    const cx = projX(d.x), cy = projY(d.y)
+    const col = teamColors[d.code] || "#fff"
+    
+    // Glow
+    ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI*2)
+    ctx.fillStyle = col+"44"; ctx.fill()
+    // Core dot
+    ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI*2)
+    ctx.fillStyle = col; ctx.fill()
+    ctx.lineWidth=2; ctx.strokeStyle="#000"; ctx.stroke()
+    // Label tag
+    ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.roundRect(cx+10, cy-7, 26, 14, 3); ctx.fill()
+    ctx.fillStyle = "#fff"; ctx.font = "bold 9px Inter"; ctx.fillText(d.code, cx+13, cy+3)
+  })
+
+  // 3. Update HTML Overlay Text
+  let maxL = 0
+  drivers.forEach(d => { if(d.lap > maxL) maxL = d.lap })
+  document.getElementById("dispLap").textContent = maxL
+
+  const mins = Math.floor(currentRealTime/60)
+  const secs = String(Math.floor(currentRealTime%60)).padStart(2,"0")
+  document.getElementById("dispTime").textContent = mins+":"+secs
+
+  // 4. Update Leaderboard HTML
+  document.getElementById("lbContent").innerHTML = drivers.map((d,i) => {
+    const col = teamColors[d.code] || "#888"
+    return `<div class="lb-row">
+      <div class="lb-pos">${i+1}</div>
+      <div class="lb-bar" style="background:${col}"></div>
+      <div class="lb-code" style="color:${col}">${d.code}</div>
+      <div class="lb-lap">L${d.lap}</div>
+      <div class="lb-tyre tyre-${d.tyre}">${d.tyre}</div>
+    </div>`
+  }).join("")
+}
+
+// Map Pan/Zoom (Mouse & Touch)
+canvas.addEventListener('mousedown', e => {
+  isDragging = true; dragStart = { x: e.clientX - camera.x, y: e.clientY - camera.y }
+})
+window.addEventListener('mousemove', e => {
+  if (isDragging) { camera.x = e.clientX - dragStart.x; camera.y = e.clientY - dragStart.y; if(!playing) drawFrame() }
+})
+window.addEventListener('mouseup', () => isDragging = false)
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault()
+  const zoom = Math.exp(e.deltaY * -0.002)
+  const mouseX = e.clientX, mouseY = e.clientY
+  camera.x = mouseX - (mouseX - camera.x) * zoom
+  camera.y = mouseY - (mouseY - camera.y) * zoom
+  camera.scale *= zoom
+  if (!playing) drawFrame()
+}, {passive:false})
+
+</script>
+</body>
+</html>
