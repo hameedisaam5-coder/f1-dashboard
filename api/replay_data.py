@@ -1,9 +1,6 @@
 """
 Vercel serverless function: GET /api/replay_data
 Returns historical race replay as compact per-lap position JSON.
-
-Uses FastF1 laps+position data only (no heavy per-Hz telemetry),
-sampled at 4Hz (every 0.25 s) to stay well within the 60-second timeout.
 """
 
 import os
@@ -22,43 +19,32 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(REPLAY_DIR, exist_ok=True)
 fastf1.Cache.enable_cache(CACHE_DIR)
 
-
 def build_replay_data(year: int, race: str, session_type: str) -> dict:
-    """
-    Build a compact replay dataset using only car position data.
-    FastF1 provides position telemetry via laps; we sample every 2 seconds
-    to keep the payload small and the processing time well under 60 s.
-    """
-    cache_key  = hashlib.md5(f"{year}:{race}:{session_type}:v4".encode()).hexdigest()
+    cache_key  = hashlib.md5(f"{year}:{race}:{session_type}:v5".encode()).hexdigest()
     cache_file = os.path.join(REPLAY_DIR, f"{cache_key}.pkl")
 
     if os.path.exists(cache_file):
         with open(cache_file, "rb") as f:
             return pickle.load(f)
 
-    # Load session – only laps + telemetry (no weather / messages)
+    # Load session
     sess = fastf1.get_session(year, race, session_type)
     sess.load(telemetry=True, weather=False, messages=False)
 
-    # ── Track layout from fastest lap ───────────────────────────────────────
     track_x, track_y = [], []
     try:
         fl  = sess.laps.pick_fastest()
         tel = fl.get_telemetry()
-        # Downsample track outline to ≤2000 points
         step = max(1, len(tel) // 2000)
         track_x = tel["X"].iloc[::step].tolist()
         track_y = tel["Y"].iloc[::step].tolist()
     except Exception as ex:
-        print("Track layout:", ex)
+        pass
 
-    # ── Per-driver position sampling ─────────────────────────────────────────
-    # Strategy: iterate each driver's laps, get telemetry at ~2 Hz to avoid
-    # loading millions of raw floats. Use numpy interp on the time axis.
-    SAMPLE_INTERVAL = 2.0          # seconds between frames
-    MAX_DURATION_S  = 7200         # 2 hours max
+    SAMPLE_INTERVAL = 2.0
+    MAX_DURATION_S  = 7200
 
-    driver_frames: dict[float, list] = {}   # t_sec -> list of driver states
+    driver_frames: dict[float, list] = {}
 
     for drv_num in sess.drivers:
         try:
@@ -67,47 +53,56 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
                 continue
             code = drv_laps.iloc[0]["Driver"]
 
-            for _, lap in drv_laps.iterlaps():
-                try:
-                    tel = lap.get_telemetry()
-                except Exception:
-                    continue
-                if tel.empty or "X" not in tel.columns:
-                    continue
+            # get_telemetry() on LAPS block gets all telemetry at once for this driver! Ultra fast.
+            all_tel = drv_laps.get_telemetry()
+            if all_tel.empty or "X" not in all_tel.columns:
+                continue
 
-                t_raw = tel["SessionTime"].dt.total_seconds().to_numpy()
-                x_raw = tel["X"].to_numpy(dtype=float)
-                y_raw = tel["Y"].to_numpy(dtype=float)
+            t_raw = all_tel["SessionTime"].dt.total_seconds().to_numpy()
+            x_raw = all_tel["X"].to_numpy(dtype=float)
+            y_raw = all_tel["Y"].to_numpy(dtype=float)
+            
+            # These columns are merged into the telemetry when called on laps
+            if "Compound" in all_tel.columns:
+                compounds = all_tel["Compound"].to_numpy()
+            else:
+                compounds = np.full(len(t_raw), "U")
+                
+            if "LapNumber" in all_tel.columns:
+                lapnums = all_tel["LapNumber"].to_numpy()
+            else:
+                lapnums = np.zeros(len(t_raw))
 
-                if len(t_raw) < 2:
-                    continue
+            if len(t_raw) < 2:
+                continue
 
-                compound   = str(lap.get("Compound", "?") or "?")[0]
-                lap_number = int(lap.get("LapNumber", 0) or 0)
+            t_start = float(t_raw[0])
+            t_end   = min(float(t_raw[-1]), MAX_DURATION_S)
 
-                # Sample every SAMPLE_INTERVAL seconds within this lap
-                t_start = float(t_raw[0])
-                t_end   = min(float(t_raw[-1]), MAX_DURATION_S)
+            t_samples = np.arange(t_start, t_end, SAMPLE_INTERVAL)
+            x_samples = np.interp(t_samples, t_raw, x_raw)
+            y_samples = np.interp(t_samples, t_raw, y_raw)
+            
+            # For categorical/integer data like Compound and LapNumber, we find the closest index
+            indices = np.searchsorted(t_raw, t_samples, side="right") - 1
+            indices = np.clip(indices, 0, len(t_raw) - 1)
+            
+            comp_samples = compounds[indices]
+            lap_samples = lapnums[indices]
 
-                t_samples = np.arange(t_start, t_end, SAMPLE_INTERVAL)
-                x_samples = np.interp(t_samples, t_raw, x_raw)
-                y_samples = np.interp(t_samples, t_raw, y_raw)
-
-                for t_s, x_s, y_s in zip(t_samples, x_samples, y_samples):
-                    t_key = round(t_s, 1)
-                    state = {
-                        "code":  code,
-                        "x":     round(float(x_s), 1),
-                        "y":     round(float(y_s), 1),
-                        "tyre":  compound,
-                        "lap":   lap_number,
-                    }
-                    driver_frames.setdefault(t_key, []).append(state)
-
+            for t_s, x_s, y_s, c_s, l_s in zip(t_samples, x_samples, y_samples, comp_samples, lap_samples):
+                t_key = round(t_s, 1)
+                state = {
+                    "code":  code,
+                    "x":     round(float(x_s), 1),
+                    "y":     round(float(y_s), 1),
+                    "tyre":  str(c_s)[0] if c_s and str(c_s) != "nan" else "?",
+                    "lap":   int(l_s) if l_s and str(l_s) != "nan" else 0,
+                }
+                driver_frames.setdefault(t_key, []).append(state)
         except Exception as ex:
             print(f"Driver {drv_num} error: {ex}")
 
-    # ── Build ordered frame list ─────────────────────────────────────────────
     all_times = sorted(driver_frames.keys())
     if not all_times:
         raise ValueError("No position data found for this session")
@@ -115,7 +110,6 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
     t_min = all_times[0]
     t_max = all_times[-1]
 
-    # Sample at SAMPLE_INTERVAL cadence (already done above, just order them)
     frames = [driver_frames[t] for t in all_times]
 
     total_laps = 0
@@ -144,7 +138,6 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
         pass
 
     return result
-
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
