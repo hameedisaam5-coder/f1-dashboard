@@ -283,6 +283,17 @@ tr:hover td{background:rgba(255,255,255,.04)}
       <tbody id="sectorBody"></tbody>
     </table>
   </div>
+
+  <!-- Lap Time Chart -->
+  <div class="section-head">📈 Lap Time Evolution</div>
+  <div style="padding:10px 12px 6px;font-size:11px;color:#9ca3af">
+    All drivers shown by default. Click up to 3 driver chips to focus — others will fade out.
+    <span id="lapChartMsg" style="color:#e10600;margin-left:8px;font-weight:600"></span>
+  </div>
+  <div id="driverChips" style="display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 14px"></div>
+  <div style="overflow-x:auto;background:#0a0a14;padding:14px 14px 8px;border-radius:8px;margin:0 0 12px">
+    <canvas id="lapTimeCanvas" style="display:block"></canvas>
+  </div>
 </div>
 
 <!-- Tab 4: Guide -->
@@ -709,6 +720,170 @@ function drawStintGantt(classified) {
       ctx.strokeStyle = "#fff3"; ctx.lineWidth = 1
       ctx.beginPath(); ctx.moveTo(xNow, PAD_T); ctx.lineTo(xNow, canvas.height-PAD_B); ctx.stroke()
     }
+  })
+}
+
+// ── Lap Time Chart ────────────────────────────────────────────────────────
+let _selectedDrivers = new Set()
+let _lastLapData     = []
+
+function updateDriverChips(drivers) {
+  const container = document.getElementById("driverChips")
+  container.innerHTML = ""
+  drivers.forEach(d => {
+    const code = d.driver_code
+    const col  = teamColors[code] || "#888"
+    const active = _selectedDrivers.has(code)
+    const chip = document.createElement("div")
+    chip.id = "chip-" + code
+    chip.style.cssText = `
+      display:inline-flex;align-items:center;gap:5px;
+      padding:4px 10px;border-radius:20px;cursor:pointer;
+      font-size:11px;font-weight:700;letter-spacing:.5px;
+      border:2px solid ${col};
+      background:${active ? col+"33" : "transparent"};
+      color:${active ? "#fff" : col};
+      transition:all .15s;
+    `
+    chip.textContent = code
+    chip.onclick = () => {
+      const selected = _selectedDrivers.has(code)
+      if (selected) {
+        _selectedDrivers.delete(code)
+      } else {
+        if (_selectedDrivers.size >= 3) {
+          document.getElementById("lapChartMsg").textContent = "Max 3 drivers selected"
+          setTimeout(() => { document.getElementById("lapChartMsg").textContent = "" }, 1500)
+          return
+        }
+        _selectedDrivers.add(code)
+      }
+      // update chip style
+      const c = document.getElementById("chip-" + code)
+      const isNowActive = _selectedDrivers.has(code)
+      c.style.background = isNowActive ? col+"33" : "transparent"
+      c.style.color       = isNowActive ? "#fff"  : col
+      // redraw chart
+      drawLapTimeChart(_lastLapData)
+    }
+    container.appendChild(chip)
+  })
+}
+
+function drawLapTimeChart(drivers) {
+  _lastLapData = drivers
+
+  const canvas = document.getElementById("lapTimeCanvas")
+  if (!canvas) return
+
+  const hasSelected = _selectedDrivers.size > 0
+
+  // Gather lap histories keyed by driver
+  const linesData = []
+  let maxLap = 0
+  let rawTimes = []
+
+  drivers.forEach(d => {
+    if (!d.lap_history || !d.lap_history.length) return
+    maxLap = Math.max(maxLap, (d.lap_number || 0))
+    d.lap_history.forEach(t => { if (t > 0) rawTimes.push(t) })
+    linesData.push(d)
+  })
+
+  if (!linesData.length) return
+
+  // Filter outliers – keep times within 110% of the median to not have outlier laps distort the scale
+  rawTimes.sort((a,b)=>a-b)
+  const med = rawTimes[Math.floor(rawTimes.length/2)]
+  const inlierTimes = rawTimes.filter(t => t <= med * 1.10)
+  const minT = Math.max(Math.min(...inlierTimes) - 1, 0)
+  const maxT = Math.max(...inlierTimes) + 2
+
+  const W      = Math.max(900, (canvas.parentElement?.offsetWidth || 900) - 28)
+  const PAD_L  = 60, PAD_R = 30, PAD_T = 20, PAD_B = 40
+  const H      = 340
+  canvas.width  = W
+  canvas.height = H
+
+  const ctx = canvas.getContext("2d")
+  ctx.clearRect(0, 0, W, H)
+
+  const chartW = W - PAD_L - PAD_R
+  const chartH = H - PAD_T - PAD_B
+  const lapCount = Math.max(maxLap, 10)
+
+  function xOf(lapIdx) { return PAD_L + (lapIdx / lapCount) * chartW }
+  function yOf(t)      { return PAD_T + chartH - ((t - minT) / (maxT - minT)) * chartH }
+
+  // Background grid
+  ctx.strokeStyle = "#1e2030"; ctx.lineWidth = 1
+  const numYLines = 6
+  for (let i = 0; i <= numYLines; i++) {
+    const t = minT + (maxT - minT) * (i / numYLines)
+    const y = yOf(t)
+    ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke()
+    // Y axis labels
+    const secs = t % 60
+    const mins = Math.floor(t / 60)
+    const label = mins + ":" + secs.toFixed(1).padStart(4, "0")
+    ctx.fillStyle = "#6b7280"; ctx.font = "10px Inter,Arial"; ctx.textAlign = "right"
+    ctx.fillText(label, PAD_L - 6, y + 4)
+  }
+  for (let l = 0; l <= lapCount; l += 5) {
+    const x = xOf(l)
+    ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke()
+    ctx.fillStyle = "#6b7280"; ctx.font = "10px Inter,Arial"; ctx.textAlign = "center"
+    ctx.fillText("L" + l, x, H - PAD_B + 14)
+  }
+
+  // Axes
+  ctx.strokeStyle = "#374151"; ctx.lineWidth = 1.5
+  ctx.beginPath(); ctx.moveTo(PAD_L, PAD_T); ctx.lineTo(PAD_L, H - PAD_B); ctx.lineTo(W - PAD_R, H - PAD_B); ctx.stroke()
+
+  // Draw lines per driver
+  linesData.forEach(d => {
+    const code = d.driver_code
+    const col  = teamColors[code] || "#888"
+    const isHighlighted = _selectedDrivers.has(code)
+    const alpha = hasSelected ? (isHighlighted ? 1 : 0.08) : 0.75
+
+    const laps = d.lap_history
+    if (!laps || !laps.length) return
+
+    // The lap_history is the last 6 laps — calculate their approximate positions
+    const startLap = (d.lap_number || laps.length) - laps.length + 1
+
+    ctx.globalAlpha = alpha
+    ctx.strokeStyle = col
+    ctx.lineWidth   = isHighlighted ? 2.5 : 1.5
+    ctx.beginPath()
+    let started = false
+    laps.forEach((t, i) => {
+      if (t > maxT || t < minT * 0.85) return  // skip outliers like pit laps
+      const x = xOf(startLap + i)
+      const y = yOf(t)
+      if (!started) { ctx.moveTo(x, y); started = true }
+      else ctx.lineTo(x, y)
+    })
+    ctx.stroke()
+
+    // Endpoint dot + label
+    const lastT = laps.findLast(t => t <= maxT && t >= minT * 0.85)
+    if (lastT !== undefined) {
+      const lx = xOf(d.lap_number || (startLap + laps.length - 1))
+      const ly = yOf(lastT)
+      ctx.beginPath(); ctx.arc(lx, ly, isHighlighted ? 4 : 2.5, 0, Math.PI*2)
+      ctx.fillStyle = col; ctx.fill()
+      // Add driver label next to the dot for highlighted / non-faded
+      if (!hasSelected || isHighlighted) {
+        ctx.globalAlpha = isHighlighted ? 1 : 0.7
+        ctx.fillStyle = col
+        ctx.font = isHighlighted ? "bold 11px Inter,Arial" : "10px Inter,Arial"
+        ctx.textAlign = "left"
+        ctx.fillText(code, lx + 6, ly + 4)
+      }
+    }
+    ctx.globalAlpha = 1
   })
 }
 
@@ -1179,6 +1354,10 @@ async function loadData() {
   renderPaceTable(classified)
   renderDegTable(classified)
   renderSectorTimes(classified)
+  // Lap time chart — only refresh chips when drivers change
+  const allDrivers = [...classified, ...dnfDrivers].filter(d => d.driver_code)
+  updateDriverChips(allDrivers)
+  drawLapTimeChart(allDrivers)
 }
 
 setInterval(loadData, 5000)
