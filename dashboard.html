@@ -204,6 +204,7 @@ tr:hover td{background:rgba(255,255,255,.04)}
   <button class="tab-btn active" id="tbtn-live" onclick="switchTab('live')">📊 Live Timing</button>
   <button class="tab-btn" id="tbtn-strategy" onclick="switchTab('strategy')">🏁 Strategy Hub</button>
   <button class="tab-btn" id="tbtn-pace" onclick="switchTab('pace')">📈 Pace Analysis</button>
+  <button class="tab-btn" id="tbtn-replay" onclick="switchTab('replay')">🎬 Replay</button>
   <button class="tab-btn" id="tbtn-guide" onclick="switchTab('guide')">📖 Guide</button>
 </div>
 
@@ -296,7 +297,81 @@ tr:hover td{background:rgba(255,255,255,.04)}
   </div>
 </div>
 
-<!-- Tab 4: Guide -->
+<!-- Tab 4: Replay -->
+<div id="tab-replay" class="tab-content">
+  <div class="section-head">🎬 Race Replay</div>
+  
+  <!-- Race Selector -->
+  <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding:12px 14px 18px;background:#0d0d1a;border-bottom:1px solid #1a1a24">
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <label style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">Year</label>
+      <select id="replayYear" style="background:#15151e;color:#f3f4f6;border:1px solid #2a2a35;border-radius:5px;padding:7px 10px;font-family:inherit;font-size:12px;font-weight:600;outline:none;cursor:pointer">
+        <option value="2026">2026</option>
+        <option value="2025" selected>2025</option>
+        <option value="2024">2024</option>
+        <option value="2023">2023</option>
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px;flex:1;min-width:180px">
+      <label style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">Race</label>
+      <select id="replayRace" style="background:#15151e;color:#f3f4f6;border:1px solid #2a2a35;border-radius:5px;padding:7px 10px;font-family:inherit;font-size:12px;font-weight:600;outline:none;cursor:pointer"></select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <label style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">Session</label>
+      <select id="replaySession" style="background:#15151e;color:#f3f4f6;border:1px solid #2a2a35;border-radius:5px;padding:7px 10px;font-family:inherit;font-size:12px;font-weight:600;outline:none;cursor:pointer">
+        <option value="R">Race</option>
+        <option value="S">Sprint</option>
+        <option value="Q">Qualifying</option>
+      </select>
+    </div>
+    <button id="replayLoadBtn" onclick="loadReplay()" style="background:#e10600;color:#fff;border:none;border-radius:5px;padding:8px 18px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:background .15s" onmouseover="this.style.background='#ff1a00'" onmouseout="this.style.background='#e10600'">⬇ LOAD REPLAY</button>
+  </div>
+
+  <!-- Loading bar -->
+  <div id="replayLoadingBar" style="display:none;padding:20px;text-align:center;color:#9ca3af;font-size:13px">
+    <div style="display:inline-block;width:200px;height:4px;background:#1a1a24;border-radius:2px;margin-bottom:8px;overflow:hidden">
+      <div id="replayProgress" style="height:100%;background:#e10600;width:0%;transition:width .3s;border-radius:2px"></div>
+    </div>
+    <div id="replayLoadMsg">Loading race data — this may take up to 60 s on first load…</div>
+  </div>
+
+  <!-- Replay player -->
+  <div id="replayPlayer" style="display:none">
+
+    <!-- Info bar -->
+    <div style="display:flex;align-items:center;gap:18px;padding:10px 14px;background:#0d0d1a;border-bottom:1px solid #1a1a24;flex-wrap:wrap">
+      <div style="font-weight:700;font-size:14px;color:#e10600" id="replayRaceName"></div>
+      <div style="font-size:12px;color:#9ca3af">Lap <span id="replayLapDisplay" style="color:#fff;font-weight:700">–</span> / <span id="replayTotalLaps">–</span></div>
+      <div style="font-size:12px;color:#9ca3af">Time <span id="replayTimeDisplay" style="color:#fff;font-weight:600;font-variant-numeric:tabular-nums">0:00</span></div>
+    </div>
+
+    <!-- Playback controls -->
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0d0d1a;border-bottom:1px solid #1a1a24;flex-wrap:wrap">
+      <button onclick="replaySeek(-30)" style="background:#1a1a24;color:#e0e0e0;border:none;border-radius:4px;padding:6px 12px;cursor:pointer;font-size:13px" title="-30s">⏮ 30s</button>
+      <button id="replayPlayBtn" onclick="toggleReplay()" style="background:#e10600;color:#fff;border:none;border-radius:4px;padding:6px 18px;font-weight:700;cursor:pointer;font-size:14px;min-width:60px">▶</button>
+      <button onclick="replaySeek(30)" style="background:#1a1a24;color:#e0e0e0;border:none;border-radius:4px;padding:6px 12px;cursor:pointer;font-size:13px" title="+30s">30s ⏭</button>
+      <span style="font-size:11px;color:#6b7280;margin-left:4px">Speed:</span>
+      <button id="replaySpeedBtn" onclick="cycleSpeed()" style="background:#2a2a35;color:#facc15;border:none;border-radius:4px;padding:5px 12px;font-weight:700;cursor:pointer;font-size:12px">1×</button>
+      <!-- Timeline scrubber -->
+      <input type="range" id="replayScrubber" min="0" max="1000" value="0" style="flex:1;min-width:100px;accent-color:#e10600" oninput="scrubReplay(this.value)">
+    </div>
+
+    <!-- Main area: track canvas + sidebar -->
+    <div style="display:flex;flex-wrap:wrap;gap:0">
+      <!-- Track canvas -->
+      <div style="flex:1;min-width:300px;background:#0a0a14;padding:10px;position:relative">
+        <canvas id="replayTrackCanvas" style="display:block;width:100%;height:auto"></canvas>
+      </div>
+      <!-- Leaderboard sidebar -->
+      <div style="width:220px;background:#0d0d1a;border-left:1px solid #1a1a24;overflow-y:auto;max-height:460px">
+        <div style="padding:8px 12px;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1a24">Positions</div>
+        <div id="replayLeaderboard" style="font-size:11px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab 5: Guide -->
 <div id="tab-guide" class="tab-content">
 <div class="guide-wrap">
 
@@ -1368,6 +1443,241 @@ document.getElementById("sessionToggle").addEventListener("change", () => {
   loadData();
 });
 loadData()
+
+// ── Race Replay Engine ────────────────────────────────────────────────────
+const F1_CALENDAR = {
+  2026: ["Australian Grand Prix","Chinese Grand Prix","Japanese Grand Prix","Bahrain Grand Prix","Saudi Arabian Grand Prix","Miami Grand Prix","Emilia Romagna Grand Prix","Monaco Grand Prix","Spanish Grand Prix","Canadian Grand Prix","Austrian Grand Prix","British Grand Prix","Belgian Grand Prix","Hungarian Grand Prix","Dutch Grand Prix","Italian Grand Prix","Azerbaijan Grand Prix","Singapore Grand Prix","United States Grand Prix","Mexico City Grand Prix","São Paulo Grand Prix","Las Vegas Grand Prix","Qatar Grand Prix","Abu Dhabi Grand Prix"],
+  2025: ["Australian Grand Prix","Chinese Grand Prix","Japanese Grand Prix","Bahrain Grand Prix","Saudi Arabian Grand Prix","Miami Grand Prix","Emilia Romagna Grand Prix","Monaco Grand Prix","Spanish Grand Prix","Canadian Grand Prix","Austrian Grand Prix","British Grand Prix","Belgian Grand Prix","Hungarian Grand Prix","Dutch Grand Prix","Italian Grand Prix","Azerbaijan Grand Prix","Singapore Grand Prix","United States Grand Prix","Mexico City Grand Prix","São Paulo Grand Prix","Las Vegas Grand Prix","Qatar Grand Prix","Abu Dhabi Grand Prix"],
+  2024: ["Bahrain Grand Prix","Saudi Arabian Grand Prix","Australian Grand Prix","Japanese Grand Prix","Chinese Grand Prix","Miami Grand Prix","Emilia Romagna Grand Prix","Monaco Grand Prix","Canadian Grand Prix","Spanish Grand Prix","Austrian Grand Prix","British Grand Prix","Hungarian Grand Prix","Belgian Grand Prix","Dutch Grand Prix","Italian Grand Prix","Azerbaijan Grand Prix","Singapore Grand Prix","United States Grand Prix","Mexico City Grand Prix","São Paulo Grand Prix","Las Vegas Grand Prix","Qatar Grand Prix","Abu Dhabi Grand Prix"],
+  2023: ["Bahrain Grand Prix","Saudi Arabian Grand Prix","Australian Grand Prix","Azerbaijan Grand Prix","Miami Grand Prix","Monaco Grand Prix","Spanish Grand Prix","Canadian Grand Prix","Austrian Grand Prix","British Grand Prix","Hungarian Grand Prix","Belgian Grand Prix","Dutch Grand Prix","Italian Grand Prix","Singapore Grand Prix","Japanese Grand Prix","Qatar Grand Prix","United States Grand Prix","Mexico City Grand Prix","São Paulo Grand Prix","Las Vegas Grand Prix","Abu Dhabi Grand Prix"],
+}
+
+function populateReplayRaces() {
+  const year = parseInt(document.getElementById("replayYear").value)
+  const races = F1_CALENDAR[year] || F1_CALENDAR[2025]
+  const sel = document.getElementById("replayRace")
+  sel.innerHTML = races.map(r => `<option value="${r}">${r}</option>`).join("")
+}
+document.getElementById("replayYear").addEventListener("change", populateReplayRaces)
+populateReplayRaces()
+
+// Replay state
+let _replayData    = null
+let _replayFrame   = 0
+let _replayPlaying = false
+let _replaySpeed   = 1
+let _replayTimer   = null
+const SPEEDS       = [0.5, 1, 2, 4, 8]
+let _speedIdx      = 1
+
+const COMPOUND_COLORS = { S:"#e10600", M:"#facc15", H:"#f3f4f6", I:"#38bdf8", W:"#3b82f6" }
+
+async function loadReplay() {
+  const year    = document.getElementById("replayYear").value
+  const race    = document.getElementById("replayRace").value
+  const session = document.getElementById("replaySession").value
+
+  // Reset
+  _replayPlaying = false
+  if (_replayTimer) clearInterval(_replayTimer)
+  document.getElementById("replayLoadingBar").style.display = "block"
+  document.getElementById("replayPlayer").style.display = "none"
+  document.getElementById("replayLoadBtn").disabled = true
+
+  // Fake progress bar animation while waiting for server
+  let fakeProgress = 0
+  const progressBar = document.getElementById("replayProgress")
+  const fakeTimer = setInterval(() => {
+    fakeProgress = Math.min(fakeProgress + (fakeProgress < 70 ? 2 : 0.3), 90)
+    progressBar.style.width = fakeProgress + "%"
+  }, 800)
+
+  try {
+    const url = `/api/replay_data?year=${year}&race=${encodeURIComponent(race)}&session=${session}`
+    const res = await fetch(url)
+    const data = await res.json()
+    clearInterval(fakeTimer)
+    progressBar.style.width = "100%"
+
+    if (data.error) throw new Error(data.error)
+    _replayData = data
+    _replayFrame = 0
+    initReplayPlayer(data, race, session)
+  } catch(e) {
+    clearInterval(fakeTimer)
+    document.getElementById("replayLoadMsg").textContent = "⚠️ " + e.message
+    progressBar.style.width = "0%"
+    progressBar.style.background = "#ef4444"
+  } finally {
+    document.getElementById("replayLoadBtn").disabled = false
+  }
+}
+
+function initReplayPlayer(data, race, session) {
+  document.getElementById("replayLoadingBar").style.display = "none"
+  document.getElementById("replayPlayer").style.display = "block"
+
+  const sessionLabel = {R:"Race", S:"Sprint", Q:"Qualifying"}[session] || session
+  document.getElementById("replayRaceName").textContent = race + " — " + sessionLabel
+  document.getElementById("replayTotalLaps").textContent = data.total_laps || "–"
+
+  // Size canvas
+  const canvas = document.getElementById("replayTrackCanvas")
+  canvas.width = 1000; canvas.height = 400
+  drawReplayFrame(data, 0)
+  document.getElementById("replayScrubber").value = 0
+}
+
+function drawReplayFrame(data, frameIdx) {
+  const canvas = document.getElementById("replayTrackCanvas")
+  if (!canvas) return
+  const ctx = canvas.getContext("2d")
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  const tx = data.track_x, ty = data.track_y
+  if (!tx || !tx.length) return
+
+  const minX = Math.min(...tx), maxX = Math.max(...tx)
+  const minY = Math.min(...ty), maxY = Math.max(...ty)
+  const PAD = 55
+  const scale = Math.min((canvas.width-PAD*2)/(maxX-minX),(canvas.height-PAD*2)/(maxY-minY))
+  const offX = (canvas.width  - (maxX-minX)*scale)/2
+  const offY = (canvas.height - (maxY-minY)*scale)/2
+
+  function proj(xi,yi) {
+    return { x:(xi-minX)*scale+offX, y:canvas.height-((yi-minY)*scale+offY) }
+  }
+
+  // Draw track in grey
+  const n = tx.length
+  ctx.beginPath(); ctx.strokeStyle="#374151"; ctx.lineWidth=5; ctx.lineCap="round"
+  for (let i=0;i<n;i++) {
+    const p=proj(tx[i],ty[i])
+    i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y)
+  }
+  ctx.stroke()
+  // close loop
+  const p0=proj(tx[0],ty[0]), pL=proj(tx[n-1],ty[n-1])
+  ctx.beginPath(); ctx.moveTo(pL.x,pL.y); ctx.lineTo(p0.x,p0.y); ctx.stroke()
+
+  // S/F line
+  const sf=proj(tx[0],ty[0])
+  ctx.strokeStyle="#fff"; ctx.lineWidth=3
+  const p1=proj(tx[1],ty[1])
+  const ang=Math.atan2(p1.y-sf.y,p1.x-sf.x)
+  const nx=Math.cos(ang+Math.PI/2)*14, ny=Math.sin(ang+Math.PI/2)*14
+  ctx.beginPath(); ctx.moveTo(sf.x+nx,sf.y+ny); ctx.lineTo(sf.x-nx,sf.y-ny); ctx.stroke()
+  ctx.fillStyle="#fff"; ctx.font="bold 8px Inter,Arial"; ctx.fillText("S/F",sf.x+4,sf.y-8)
+
+  // Drivers – build a position-sorted array for leaderboard
+  const frame = data.frames[frameIdx] || []
+  const sorted = [...frame].sort((a,b) => {
+    // Sort by lap desc then position within lap (can't know gaps so use lap desc)
+    return b.lap - a.lap
+  })
+  
+  let maxLapInFrame = 0
+  frame.forEach(d => { if (d.lap > maxLapInFrame) maxLapInFrame = d.lap })
+
+  frame.forEach(d => {
+    if (d.x == null) return
+    const p = proj(d.x, d.y)
+    const col = teamColors[d.code] || "#888"
+    // Glow
+    ctx.beginPath(); ctx.arc(p.x,p.y,9,0,Math.PI*2)
+    ctx.fillStyle = col+"33"; ctx.fill()
+    // Dot
+    ctx.beginPath(); ctx.arc(p.x,p.y,6,0,Math.PI*2)
+    ctx.fillStyle = col; ctx.fill()
+    ctx.strokeStyle="rgba(0,0,0,.6)"; ctx.lineWidth=1; ctx.stroke()
+    // Driver code
+    ctx.fillStyle="#fff"; ctx.font="bold 8px Inter,Arial"
+    ctx.fillText(d.code,p.x+8,p.y+4)
+  })
+
+  // Update info bar
+  document.getElementById("replayLapDisplay").textContent = maxLapInFrame
+
+  const elapsedSec = frameIdx + (data.t_min || 0) - (data.t_min || 0)
+  const mins = Math.floor(frameIdx/60)
+  const secs = String(frameIdx%60).padStart(2,"0")
+  document.getElementById("replayTimeDisplay").textContent = mins+":"+secs
+
+  // Update scrubber
+  const totalFrames = data.frames.length - 1
+  const scrub = document.getElementById("replayScrubber")
+  if (!scrub._dragging) {
+    scrub.value = Math.round((frameIdx/Math.max(totalFrames,1))*1000)
+  }
+
+  // Update leaderboard
+  const lb = document.getElementById("replayLeaderboard")
+  lb.innerHTML = sorted.map((d,i) => {
+    const col = teamColors[d.code] || "#888"
+    const tyreC = COMPOUND_COLORS[d.tyre] || "#888"
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid #1a1a24">
+      <span style="color:#6b7280;font-weight:700;font-size:10px;min-width:16px">${i+1}</span>
+      <div style="width:3px;height:18px;background:${col};border-radius:2px;flex-shrink:0"></div>
+      <span style="font-weight:700;color:${col}">${d.code}</span>
+      <span style="margin-left:auto;font-size:10px;color:${tyreC};font-weight:700">${d.tyre||"?"}</span>
+      <span style="font-size:10px;color:#6b7280">L${d.lap}</span>
+    </div>`
+  }).join("")
+}
+
+function tickReplay() {
+  if (!_replayData || !_replayData.frames.length) return
+  const totalFrames = _replayData.frames.length - 1
+  if (_replayFrame >= totalFrames) {
+    _replayPlaying = false
+    clearInterval(_replayTimer)
+    document.getElementById("replayPlayBtn").textContent = "▶"
+    return
+  }
+  _replayFrame = Math.min(_replayFrame + 1, totalFrames)
+  drawReplayFrame(_replayData, _replayFrame)
+}
+
+function toggleReplay() {
+  if (!_replayData) return
+  _replayPlaying = !_replayPlaying
+  document.getElementById("replayPlayBtn").textContent = _replayPlaying ? "⏸" : "▶"
+  if (_replayPlaying) {
+    _replayTimer = setInterval(tickReplay, Math.round(1000 / _replaySpeed))
+  } else {
+    clearInterval(_replayTimer)
+  }
+}
+
+function replaySeek(deltaSec) {
+  if (!_replayData) return
+  _replayFrame = Math.max(0, Math.min(_replayFrame + deltaSec, _replayData.frames.length-1))
+  drawReplayFrame(_replayData, _replayFrame)
+}
+
+function scrubReplay(val) {
+  if (!_replayData) return
+  const totalFrames = _replayData.frames.length - 1
+  _replayFrame = Math.round((val/1000)*totalFrames)
+  drawReplayFrame(_replayData, _replayFrame)
+}
+
+function cycleSpeed() {
+  _speedIdx = (_speedIdx + 1) % SPEEDS.length
+  _replaySpeed = SPEEDS[_speedIdx]
+  document.getElementById("replaySpeedBtn").textContent = _replaySpeed + "×"
+  if (_replayPlaying) {
+    clearInterval(_replayTimer)
+    _replayTimer = setInterval(tickReplay, Math.round(1000 / _replaySpeed))
+  }
+}
+
+// Mark scrubber as being dragged so we don't fight updates
+const scrubEl = document.getElementById("replayScrubber")
+scrubEl.addEventListener("mousedown", () => { scrubEl._dragging = true })
+scrubEl.addEventListener("touchstart", () => { scrubEl._dragging = true })
+window.addEventListener("mouseup", () => { scrubEl._dragging = false })
+window.addEventListener("touchend", () => { scrubEl._dragging = false })
 </script>
 </body>
 </html>

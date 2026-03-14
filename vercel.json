@@ -3,6 +3,10 @@
     "api/race_data.py": {
       "memory": 1024,
       "maxDuration": 60
+    },
+    "api/replay_data.py": {
+      "memory": 2048,
+      "maxDuration": 60
     }
   },
   "rewrites": [
