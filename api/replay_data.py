@@ -61,17 +61,14 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
             t_raw = all_tel["SessionTime"].dt.total_seconds().to_numpy()
             x_raw = all_tel["X"].to_numpy(dtype=float)
             y_raw = all_tel["Y"].to_numpy(dtype=float)
+            s_raw = all_tel["Speed"].to_numpy(dtype=float)
+            thr_raw = all_tel["Throttle"].to_numpy(dtype=float)
+            brk_raw = all_tel["Brake"].to_numpy(dtype=float)
+            ger_raw = all_tel["nGear"].to_numpy(dtype=float)
             
-            # These columns are merged into the telemetry when called on laps
-            if "Compound" in all_tel.columns:
-                compounds = all_tel["Compound"].to_numpy()
-            else:
-                compounds = np.full(len(t_raw), "U")
-                
-            if "LapNumber" in all_tel.columns:
-                lapnums = all_tel["LapNumber"].to_numpy()
-            else:
-                lapnums = np.zeros(len(t_raw))
+            drv_session_times = drv_laps["SessionTime"].dt.total_seconds().to_numpy()
+            drv_lap_nums = drv_laps["LapNumber"].to_numpy()
+            drv_compounds = drv_laps["Compound"].to_numpy()
 
             if len(t_raw) < 2:
                 continue
@@ -82,20 +79,29 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
             t_samples = np.arange(t_start, t_end, SAMPLE_INTERVAL)
             x_samples = np.interp(t_samples, t_raw, x_raw)
             y_samples = np.interp(t_samples, t_raw, y_raw)
+            s_samples = np.interp(t_samples, t_raw, s_raw)
+            thr_samples = np.interp(t_samples, t_raw, thr_raw)
+            brk_samples = np.interp(t_samples, t_raw, brk_raw)
+            ger_samples = np.round(np.interp(t_samples, t_raw, ger_raw))
             
-            # For categorical/integer data like Compound and LapNumber, we find the closest index
-            indices = np.searchsorted(t_raw, t_samples, side="right") - 1
-            indices = np.clip(indices, 0, len(t_raw) - 1)
+            # For each t_sample, find which lap it belongs to (SessionTime is lap end time)
+            lap_indices = np.searchsorted(drv_session_times, t_samples)
+            lap_indices = np.clip(lap_indices, 0, len(drv_laps) - 1)
             
-            comp_samples = compounds[indices]
-            lap_samples = lapnums[indices]
+            comp_samples = drv_compounds[lap_indices]
+            lap_samples = drv_lap_nums[lap_indices]
 
-            for t_s, x_s, y_s, c_s, l_s in zip(t_samples, x_samples, y_samples, comp_samples, lap_samples):
+            for i in range(len(t_samples)):
+                t_s, x_s, y_s, c_s, l_s = t_samples[i], x_samples[i], y_samples[i], comp_samples[i], lap_samples[i]
                 t_key = round(t_s, 1)
                 state = {
                     "code":  code,
                     "x":     round(float(x_s), 1),
                     "y":     round(float(y_s), 1),
+                    "s":     int(s_samples[i]),
+                    "t":     int(thr_samples[i]),
+                    "b":     int(brk_samples[i]),
+                    "g":     int(ger_samples[i]),
                     "tyre":  str(c_s)[0] if c_s and str(c_s) != "nan" else "?",
                     "lap":   int(l_s) if l_s and str(l_s) != "nan" else 0,
                 }

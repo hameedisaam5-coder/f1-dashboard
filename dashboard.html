@@ -612,26 +612,45 @@ function drawTrack(data) {
   }
   const n = tx.length
   
-  // Build continuous track path
+  const s1 = Math.floor(n/3), s2 = Math.floor(2*n/3)
+  const segs = [
+    {from:0, to:s1, col:"#a855f7"}, // Purple for Sector 1
+    {from:s1, to:s2, col:"#facc15"}, // Yellow for Sector 2
+    {from:s2, to:n-1, col:"#ef4444"} // Red for Sector 3
+  ]
+
+  ctx.lineJoin="round"; ctx.lineCap="round";
+
+  // 1. Outer colored border + glow
+  ctx.lineWidth = 12;
+  ctx.shadowBlur = 12;
+  segs.forEach(seg => {
+    ctx.beginPath();
+    ctx.strokeStyle = seg.col;
+    ctx.shadowColor = seg.col;
+    for (let i = seg.from; i <= seg.to; i++) {
+      const p = proj(tx[i], ty[i]);
+      i === seg.from ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  });
+
+  // close the loop from end to start using Sector 3 color
+  ctx.beginPath();
+  const p0 = proj(tx[0], ty[0]), pL = proj(tx[n-1], ty[n-1]);
+  ctx.moveTo(pL.x, pL.y); ctx.lineTo(p0.x, p0.y);
+  ctx.stroke();
+  
+  ctx.shadowBlur = 0; 
+
+  // Build continuous track path for inner fills
   const trackPath = new Path2D();
-  let firstPos = proj(tx[0], ty[0]);
-  trackPath.moveTo(firstPos.x, firstPos.y);
+  trackPath.moveTo(p0.x, p0.y);
   for (let i=1; i<n; i++) {
     const p = proj(tx[i], ty[i]);
     trackPath.lineTo(p.x, p.y);
   }
   trackPath.closePath();
-
-  ctx.lineJoin="round"; ctx.lineCap="round";
-
-  // 1. Outer glow
-  ctx.shadowColor = "rgba(255, 255, 255, 0.15)";
-  ctx.shadowBlur = 12;
-  // Outer border (track edge)
-  ctx.strokeStyle = "#4b5563"; 
-  ctx.lineWidth = 12;
-  ctx.stroke(trackPath);
-  ctx.shadowBlur = 0; 
 
   // 2. Inner asphalt
   ctx.strokeStyle = "#111827"; 
