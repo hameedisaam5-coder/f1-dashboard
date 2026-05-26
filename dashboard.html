@@ -164,16 +164,44 @@ tr:hover td{background:rgba(255,255,255,.04)}
 <!-- Header -->
 <div class="header">
   <div class="header-left">
-    <div class="header-title" id="headerTitle">Strategy Dashboard</div>
-    <div class="header-sub">Near-live / 5s sync</div>
+    <div class="header-title" id="headerTitle">Replay Dashboard</div>
+    <div class="header-sub">Historical Data Playback</div>
   </div>
   <img src="https://upload.wikimedia.org/wikipedia/commons/3/33/F1.svg" class="header-logo" alt="F1 Logo">
-  <div class="header-right" style="gap: 12px;">
-    <select id="sessionToggle" style="background:#1a1a24;color:#f3f4f6;border:1px solid #2a2a35;border-radius:4px;padding:4px 8px;font-family:inherit;font-size:12px;font-weight:600;outline:none;cursor:pointer;">
-      <option value="R">Grand Prix</option>
-      <option value="S">Sprint</option>
+  <div class="header-right" style="gap: 12px; display:flex; align-items:center;">
+    <select id="rpYear" style="background:#1a1a24;color:#f3f4f6;border:1px solid #2a2a35;border-radius:4px;padding:4px;font-size:12px;">
+      <option value="2025" selected>2025</option><option value="2024">2024</option>
     </select>
-    <span id="lastUpdate"></span>
+    <select id="rpRace" style="background:#1a1a24;color:#f3f4f6;border:1px solid #2a2a35;border-radius:4px;padding:4px;font-size:12px;">
+      <option value="Australian Grand Prix" selected>Australian GP</option>
+      <option value="Bahrain Grand Prix">Bahrain GP</option>
+      <option value="Saudi Arabian Grand Prix">Saudi Arabian GP</option>
+      <option value="Japanese Grand Prix">Japanese GP</option>
+      <option value="Chinese Grand Prix">Chinese GP</option>
+      <option value="Miami Grand Prix">Miami GP</option>
+      <option value="Emilia Romagna Grand Prix">Imola GP</option>
+      <option value="Monaco Grand Prix">Monaco GP</option>
+      <option value="Canadian Grand Prix">Canadian GP</option>
+      <option value="Spanish Grand Prix">Spanish GP</option>
+      <option value="Austrian Grand Prix">Austrian GP</option>
+      <option value="British Grand Prix">British GP</option>
+      <option value="Hungarian Grand Prix">Hungarian GP</option>
+      <option value="Belgian Grand Prix">Belgian GP</option>
+      <option value="Dutch Grand Prix">Dutch GP</option>
+      <option value="Italian Grand Prix">Italian GP</option>
+      <option value="Azerbaijan Grand Prix">Azerbaijan GP</option>
+      <option value="Singapore Grand Prix">Singapore GP</option>
+      <option value="United States Grand Prix">US GP</option>
+      <option value="Mexico City Grand Prix">Mexico GP</option>
+      <option value="São Paulo Grand Prix">São Paulo GP</option>
+      <option value="Las Vegas Grand Prix">Las Vegas GP</option>
+      <option value="Qatar Grand Prix">Qatar GP</option>
+      <option value="Abu Dhabi Grand Prix">Abu Dhabi GP</option>
+    </select>
+    <select id="rpSession" style="background:#1a1a24;color:#f3f4f6;border:1px solid #2a2a35;border-radius:4px;padding:4px;font-size:12px;">
+      <option value="R" selected>Race</option><option value="S">Sprint</option><option value="Q">Qualifying</option>
+    </select>
+    <button onclick="rpLoad()" style="background:#e10600;color:#fff;border:none;border-radius:4px;padding:5px 12px;font-weight:bold;cursor:pointer;">▶ LOAD REPLAY</button>
   </div>
 </div>
 
@@ -189,13 +217,21 @@ tr:hover td{background:rgba(255,255,255,.04)}
 </div>
 
 <!-- Track Map -->
-<div class="track-section">
-  <canvas id="trackMap" width="1000" height="360"></canvas>
-  <div class="sector-legend">
-    <div class="sector-legend-item"><div class="sector-dot" style="background:#a855f7"></div>Sector 1</div>
-    <div class="sector-legend-item"><div class="sector-dot" style="background:#facc15"></div>Sector 2</div>
-    <div class="sector-legend-item"><div class="sector-dot" style="background:#ef4444"></div>Sector 3</div>
-    <div class="sector-legend-item"><div class="sector-dot" style="background:#fff;border:1px solid #555"></div>S/F</div>
+<div class="track-section" style="position:relative;">
+  <div id="replayWrap" style="height: 360px; position: relative; overflow: hidden; background: #000; border-radius: 6px; margin: 0 10px;">
+    <canvas id="replayCanvas" style="display:block; width:100%; height:100%; cursor:grab;"></canvas>
+    <div id="rpLoader" style="position:absolute; inset:0; background:rgba(0,0,0,0.8); z-index:50; display:none; flex-direction:column; align-items:center; justify-content:center;">
+      <div style="width:40px; height:40px; border:4px solid transparent; border-top-color:#e10600; border-radius:50%; animation:rp-spin 1s linear infinite; margin-bottom:10px;"></div>
+      <div id="rpLoaderTxt" style="font-weight:bold;">Downloading Telemetry...</div>
+    </div>
+  </div>
+  <style>@keyframes rp-spin { 100%{transform:rotate(360deg)} } input[type=range]{-webkit-appearance:none;background:transparent} input[type=range]::-webkit-slider-runnable-track{height:4px;background:#333;border-radius:2px} input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#e10600;border-radius:50%;margin-top:-5px;cursor:pointer}</style>
+  <div style="display:flex; justify-content:center; align-items:center; gap: 16px; padding: 10px;">
+    <button onclick="rpTogglePlay()" id="rpPlayBtn" style="background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 12px;cursor:pointer;">▶</button>
+    <div id="rpTimeCur" style="font-variant-numeric:tabular-nums;font-size:13px;width:40px;text-align:right;">0:00</div>
+    <input type="range" id="rpScrubber" min="0" max="1000" value="0" style="flex:1;max-width:600px;">
+    <div id="rpTimeMax" style="font-variant-numeric:tabular-nums;font-size:13px;width:40px;">0:00</div>
+    <button onclick="rpCycleSpeed()" id="rpSpeedBtn" style="background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 12px;cursor:pointer;">1x</button>
   </div>
 </div>
 
