@@ -45,6 +45,28 @@
     .btn-red { background: #e10600; border-color: #ff1a1a; font-weight: bold; }
     .btn-red:hover { background: #ff1a1a; }
 
+    /* Race Intelligence */
+    #raceIntelPanel {
+      top: 86px; left: 20px; width: 330px; max-height: calc(100vh - 260px);
+      display: none; flex-direction: column; gap: 12px;
+    }
+    .intel-section { display: flex; flex-direction: column; gap: 8px; }
+    .intel-title { font-size: 12px; color: #9ca3af; text-transform: uppercase; font-weight: 800; letter-spacing: .06em; }
+    .prediction-row, .driver-row {
+      display: grid; grid-template-columns: 42px 1fr 52px; gap: 8px; align-items: center;
+      font-size: 12px; padding: 7px 8px; border: 1px solid rgba(255,255,255,.09); border-radius: 6px;
+      background: rgba(255,255,255,.04);
+    }
+    .prediction-code, .driver-code-small { font-weight: 900; }
+    .prediction-reason, .driver-meta { color: #9ca3af; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .prediction-chance { text-align: right; font-variant-numeric: tabular-nums; font-weight: 800; }
+    .selected-card { border: 1px solid rgba(255,255,255,.12); border-radius: 6px; padding: 10px; background: rgba(0,0,0,.22); }
+    .selected-name { font-size: 18px; font-weight: 900; margin-bottom: 8px; }
+    .metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+    .metric { background: rgba(255,255,255,.05); border-radius: 5px; padding: 7px; }
+    .metric-label { color: #9ca3af; font-size: 10px; text-transform: uppercase; font-weight: 800; }
+    .metric-value { margin-top: 2px; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
     /* Weather Panel */
     #weatherPanel {
       top: 20px; right: 350px; width: 200px;
@@ -175,6 +197,10 @@
     .close-btn:hover { background: #e10600; }
     
     .chart-container { flex: 1; position: relative; width: 100%; min-height: 0; }
+    #selectedSummary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin-bottom: 16px; }
+    .summary-box { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 6px; padding: 10px; }
+    .summary-label { color: #9ca3af; font-size: 11px; text-transform: uppercase; font-weight: 800; }
+    .summary-value { margin-top: 4px; font-size: 16px; font-weight: 900; font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body>
@@ -184,9 +210,9 @@
 
   <!-- Top Bar -->
   <div id="topBar" class="glass-panel">
-    <a href="/" class="text-xs text-gray-400 hover:text-white mr-4 flex items-center gap-1">
+    <a href="/replay.html" class="text-xs text-gray-400 hover:text-white mr-4 flex items-center gap-1">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-      Dashboard
+      Replay
     </a>
     <select id="selYear">
       <option value="2025" selected>2025</option>
@@ -213,6 +239,21 @@
       <option value="Q">Qualifying (Q)</option>
     </select>
     <button id="btnLoad" class="btn-red" onclick="loadReplay()">LOAD REPLAY</button>
+  </div>
+
+  <!-- Race Intelligence -->
+  <div id="raceIntelPanel" class="glass-panel">
+    <div class="lb-title">Race Intelligence</div>
+    <div class="intel-section">
+      <div class="intel-title">Next race form model</div>
+      <div id="predictionList"></div>
+    </div>
+    <div class="intel-section">
+      <div class="intel-title">Selected driver</div>
+      <div id="selectedDriverCard" class="selected-card">
+        <div class="driver-meta">Select a driver on the leaderboard to inspect pace, consistency, tyres, and replay telemetry.</div>
+      </div>
+    </div>
   </div>
 
   <!-- Weather Panel -->
@@ -280,6 +321,7 @@
       <h2><span id="insIndicator" style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#e10600;"></span> Insights: <span id="insDriver">Select a Driver</span></h2>
       <button class="close-btn" onclick="document.getElementById('insightsModal').style.display='none'">×</button>
     </div>
+    <div id="selectedSummary"></div>
     <div class="chart-container">
       <canvas id="insightChart"></canvas>
     </div>
@@ -431,6 +473,110 @@
       return `${m}:${s}`
     }
 
+    function formatLapTime(secs) {
+      if (secs == null || Number.isNaN(Number(secs))) return "--"
+      const m = Math.floor(secs / 60)
+      const s = (secs % 60).toFixed(3).padStart(6, "0")
+      return `${m}:${s}`
+    }
+
+    function getAnalysisDriver(code) {
+      return replayData?.race_analysis?.drivers?.find(d => d.code === code) || null
+    }
+
+    function renderRaceIntel() {
+      const panel = document.getElementById("raceIntelPanel")
+      const list = document.getElementById("predictionList")
+      if (!panel || !list || !replayData) return
+      panel.style.display = "flex"
+      const predictions = replayData.race_analysis?.predictions || []
+      list.innerHTML = predictions.length
+        ? predictions.slice(0, 5).map(p => {
+            const col = teamColors[p.code] || "#ddd"
+            return `<div class="prediction-row">
+              <div class="prediction-code" style="color:${col}">${p.code}</div>
+              <div class="prediction-reason" title="${p.reason}">${p.reason}</div>
+              <div class="prediction-chance">${p.win_chance}%</div>
+            </div>`
+          }).join("")
+        : `<div class="driver-meta">Prediction model will appear after replay analysis loads.</div>`
+    }
+
+    function renderSelectedDriverCard(state) {
+      const card = document.getElementById("selectedDriverCard")
+      if (!card) return
+      const code = selectedDrivers[0]
+      if (!code) {
+        card.innerHTML = `<div class="driver-meta">Select a driver on the leaderboard to inspect pace, consistency, tyres, and replay telemetry.</div>`
+        return
+      }
+      const current = state?.drivers?.find(d => d.code === code)
+      const analysis = getAnalysisDriver(code)
+      const lapInfo = getDriverLapInfo(code, currentRealTime)
+      const col = teamColors[code] || "#fff"
+      const trend = lapInfo.trend == null ? "--" : `${lapInfo.trend >= 0 ? "+" : ""}${lapInfo.trend.toFixed(2)}s`
+      const pos = current ? state.drivers.findIndex(d => d.code === code) + 1 : analysis?.finish_position || "--"
+      card.innerHTML = `
+        <div class="selected-name" style="color:${col}">${code}</div>
+        <div class="metric-grid">
+          <div class="metric"><div class="metric-label">Position</div><div class="metric-value">P${pos}</div></div>
+          <div class="metric"><div class="metric-label">Speed</div><div class="metric-value">${current ? Math.round(current.s) + " km/h" : "--"}</div></div>
+          <div class="metric"><div class="metric-label">Best lap</div><div class="metric-value">${formatLapTime(analysis?.best_lap)}</div></div>
+          <div class="metric"><div class="metric-label">Recent trend</div><div class="metric-value">${trend}</div></div>
+          <div class="metric"><div class="metric-label">Tyre</div><div class="metric-value">${current?.tyre || lapInfo.latest?.tyre || "--"}</div></div>
+          <div class="metric"><div class="metric-label">Consistency</div><div class="metric-value">${analysis?.consistency == null ? "--" : analysis.consistency.toFixed(2) + "s"}</div></div>
+        </div>`
+    }
+
+    function renderSelectedSummary(state) {
+      const box = document.getElementById("selectedSummary")
+      if (!box) return
+      const code = selectedDrivers[0]
+      const current = code ? state?.drivers?.find(d => d.code === code) : null
+      const analysis = code ? getAnalysisDriver(code) : null
+      const lapInfo = code ? getDriverLapInfo(code, currentRealTime) : null
+      if (!code || !current) {
+        box.innerHTML = `<div class="summary-box"><div class="summary-label">Driver</div><div class="summary-value">Select one</div></div>`
+        return
+      }
+      box.innerHTML = `
+        <div class="summary-box"><div class="summary-label">Speed</div><div class="summary-value">${Math.round(current.s)} km/h</div></div>
+        <div class="summary-box"><div class="summary-label">Throttle</div><div class="summary-value">${Math.round(current.t)}%</div></div>
+        <div class="summary-box"><div class="summary-label">Brake</div><div class="summary-value">${Math.round(current.b)}%</div></div>
+        <div class="summary-box"><div class="summary-label">Best lap</div><div class="summary-value">${formatLapTime(analysis?.best_lap)}</div></div>
+        <div class="summary-box"><div class="summary-label">Avg pace</div><div class="summary-value">${formatLapTime(analysis?.avg_pace)}</div></div>
+        <div class="summary-box"><div class="summary-label">Tyre age</div><div class="summary-value">${lapInfo?.age ?? "--"}</div></div>
+        <div class="summary-box"><div class="summary-label">Gear</div><div class="summary-value">${current.g ?? "--"}</div></div>
+        <div class="summary-box"><div class="summary-label">DRS</div><div class="summary-value">${((current.drs>=10 && current.drs<=14) || current.drs===8) ? "Open" : "Closed"}</div></div>`
+    }
+
+    function updateTelemetryChart(code) {
+      if (!code || !replayData?.frames?.length || chartInstance.canvas.offsetParent === null) return
+      const idx = Math.max(0, Math.min(replayData.frames.length - 1, Math.round(currentRealTime / replayData.frame_step)))
+      const start = Math.max(0, idx - 30)
+      const end = Math.min(replayData.frames.length - 1, idx + 10)
+      const labels = []
+      const speed = []
+      const throttle = []
+      const brake = []
+      for (let i = start; i <= end; i++) {
+        const frame = replayData.frames[i]
+        const d = frame.drivers.find(x => x.code === code)
+        if (!d) continue
+        labels.push(formatTime(frame.t))
+        speed.push(d.s)
+        throttle.push(d.t)
+        brake.push(d.b)
+      }
+      chartInstance.data.labels = labels
+      chartInstance.data.datasets = [
+        { label: "Speed", data: speed, borderColor: teamColors[code] || "#fff", yAxisID: "y" },
+        { label: "Throttle", data: throttle, borderColor: "#22c55e", yAxisID: "y1" },
+        { label: "Brake", data: brake, borderColor: "#e10600", yAxisID: "y1" }
+      ]
+      chartInstance.update("none")
+    }
+
     async function readReplayResponse(res) {
       const text = await res.text()
       let data = null
@@ -571,6 +717,7 @@
       const sess = document.getElementById("selSession").value
 
       document.getElementById("loader").style.display = "flex"
+      document.getElementById("raceIntelPanel").style.display = "none"
       document.getElementById("weatherPanel").style.display = "none"
       document.getElementById("strategyPanel").style.display = "none"
       document.getElementById("leaderboardPanel").style.display = "none"
@@ -586,6 +733,8 @@
         replayData = data
         currentRealTime = 0
         speedIdx = 1; applySpeed()
+        selectedDrivers = []
+        renderRaceIntel()
         
         // Auto center track
         let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity
@@ -635,6 +784,7 @@
         document.getElementById("leaderboardPanel").style.display = "flex"
         document.getElementById("weatherPanel").style.display = "block"
         document.getElementById("strategyPanel").style.display = "flex"
+        document.getElementById("raceIntelPanel").style.display = "flex"
         
         togglePlay() // start playing
       } catch (e) {
@@ -888,37 +1038,13 @@
         document.getElementById("lbLapCount").textContent = `${Math.max(1, state.drivers[0].lap)} / ${replayData.total_laps}`
       }
       updateStrategyPanel(state)
+      renderSelectedDriverCard(state)
+      renderSelectedSummary(state)
 
       // Update Insights Chart
-      if (selectedDrivers.length > 0 && chartInstance.canvas.offsetParent !== null) {
-        const code = selectedDrivers[0]
-        const d = state.drivers.find(x => x.code === code)
-        if (d) {
-          // We push real-time data into the labels/datasets like a moving window
-          const maxPts = 100
-          if (chartInstance.data.labels.length > maxPts) {
-             chartInstance.data.labels.shift()
-             chartInstance.data.datasets.forEach(ds => ds.data.shift())
-          }
-          chartInstance.data.labels.push(formatTime(currentRealTime))
-          
-          if(chartInstance.data.datasets.length === 0) {
-            chartInstance.data.datasets = [
-              { label:'Speed', data:[], borderColor: teamColors[code]||'#fff', yAxisID: 'y' },
-              { label:'Throttle', data:[], borderColor: '#22c55e', yAxisID: 'y1' },
-              { label:'Brake', data:[], borderColor: '#e10600', yAxisID: 'y1' }
-            ]
-          } else {
-             chartInstance.data.datasets[0].borderColor = teamColors[code]||'#fff'
-          }
-          chartInstance.data.datasets[0].data.push(d.s)
-          chartInstance.data.datasets[1].data.push(d.t)
-          chartInstance.data.datasets[2].data.push(d.b)
-          
-          chartInstance.update('none')
-        }
+      if (selectedDrivers.length > 0) {
+        updateTelemetryChart(selectedDrivers[0])
       } else {
-        // flush chart if closed or unselected
         chartInstance.data.labels = []
         chartInstance.data.datasets = []
         chartInstance.update('none')

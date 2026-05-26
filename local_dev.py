@@ -1,5 +1,5 @@
 """
-Local dev server for F1 Dashboard.
+Local dev server for F1 Race Replay.
 Serves static HTML/CSS/JS files and routes /api/* calls to their Python handlers.
 Usage: python local_dev.py
 """
@@ -26,10 +26,8 @@ class DevHandler(BaseHTTPRequestHandler):
         # Route /api/* calls to Python handlers
         if path == '/api/replay_data':
             self._route_api('replay_data', parsed.query)
-        elif path == '/api/race_data':
-            self._route_api('race_data', parsed.query)
         elif path == '' or path == '/':
-            self._serve_file('/dashboard.html')
+            self._serve_file('/replay.html')
         else:
             self._serve_file(path)
 
@@ -56,13 +54,6 @@ class DevHandler(BaseHTTPRequestHandler):
                 if hasattr(mod, '_json_safe'):
                     data = mod._json_safe(data)
                 body = json.dumps(data, allow_nan=False).replace('NaN', 'null').encode()
-            elif module_name == 'race_data':
-                # Fallback for race_data
-                year = int(qs.get('year', ['2025'])[0])
-                race = qs.get('race', ['Australian Grand Prix'])[0]
-                session = qs.get('session', ['R'])[0].upper()
-                data = mod.build_race_data(year, race, session) if hasattr(mod, 'build_race_data') else {}
-                body = json.dumps(data).encode()
             else:
                 body = b'{"error":"unknown api"}'
             
@@ -108,7 +99,7 @@ class DevHandler(BaseHTTPRequestHandler):
         print(f"[DEV] {self.command} {self.path} -> {args[0] if len(args) > 0 else ''}")
 
 if __name__ == '__main__':
-    print(f"F1 Dashboard Dev Server running on http://localhost:{PORT}")
+    print(f"F1 Race Replay Dev Server running on http://localhost:{PORT}")
     print(f"   Open: http://localhost:{PORT}/replay.html")
     print(f"   Press Ctrl+C to stop")
     server = HTTPServer(('', PORT), DevHandler)

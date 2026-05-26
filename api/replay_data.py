@@ -42,6 +42,144 @@ def _json_safe(value):
         return None
     return value
 
+def _median(values):
+    vals = sorted(v for v in values if v is not None and not math.isnan(float(v)))
+    if not vals:
+        return None
+    mid = len(vals) // 2
+    if len(vals) % 2:
+        return float(vals[mid])
+    return float((vals[mid - 1] + vals[mid]) / 2)
+
+def _stdev(values):
+    vals = [float(v) for v in values if v is not None and not math.isnan(float(v))]
+    if len(vals) < 2:
+        return None
+    mean = sum(vals) / len(vals)
+    return math.sqrt(sum((v - mean) ** 2 for v in vals) / len(vals))
+
+def _build_race_analysis(driver_laps, total_laps):
+    drivers = []
+    for code, laps in driver_laps.items():
+        timed = [lap for lap in laps if lap.get("time")]
+        if not timed:
+            continue
+
+        times = [float(lap["time"]) for lap in timed]
+        filtered_times = []
+        med = _median(times)
+        if med:
+            filtered_times = [t for t in times if t <= med * 1.12]
+        filtered_times = filtered_times or times
+
+        stint_map = {}
+        compound_laps = {}
+        for lap in timed:
+            stint = int(lap.get("stint") or 0)
+            tyre = str(lap.get("tyre") or "UNKNOWN").upper()
+            stint_map.setdefault(stint, {"stint": stint, "tyre": tyre, "laps": 0})
+            stint_map[stint]["laps"] += 1
+            compound_laps[tyre] = compound_laps.get(tyre, 0) + 1
+
+        first = timed[0]
+        last = timed[-1]
+        recent = timed[-5:]
+        prev = timed[-10:-5]
+        recent_avg = sum(float(l["time"]) for l in recent) / len(recent) if recent else None
+        prev_avg = sum(float(l["time"]) for l in prev) / len(prev) if prev else None
+        trend = recent_avg - prev_avg if recent_avg is not None and prev_avg is not None else None
+        final_lap = int(last.get("lap") or 0)
+        final_time = float(last.get("t") or 0)
+
+        drivers.append({
+            "code": code,
+            "completed_laps": final_lap,
+            "classified": bool(total_laps and final_lap >= max(1, total_laps - 1)),
+            "best_lap": min(times),
+            "avg_pace": sum(filtered_times) / len(filtered_times),
+            "median_pace": med,
+            "recent_pace": recent_avg,
+            "pace_trend": trend,
+            "consistency": _stdev(filtered_times),
+            "pits": max(0, len([s for s in stint_map if s]) - 1),
+            "stints": sorted(stint_map.values(), key=lambda s: s["stint"]),
+            "compound_laps": compound_laps,
+            "first_lap_time": float(first.get("time") or 0),
+            "final_time": final_time,
+        })
+
+    if not drivers:
+        return {"drivers": [], "classification": [], "predictions": []}
+
+    classification = sorted(
+        drivers,
+        key=lambda d: (-d["completed_laps"], d["final_time"])
+    )
+    for pos, item in enumerate(classification, 1):
+        item["finish_position"] = pos
+
+    pace_sorted = sorted(drivers, key=lambda d: d["avg_pace"])
+    best_pace = pace_sorted[0]["avg_pace"]
+    worst_pace = pace_sorted[-1]["avg_pace"]
+    spread = max(0.001, worst_pace - best_pace)
+
+    prediction_rows = []
+    for item in drivers:
+        pace_score = 1 - ((item["avg_pace"] - best_pace) / spread)
+        consistency = item["consistency"] if item["consistency"] is not None else 3.5
+        consistency_score = max(0, min(1, 1 - consistency / 4.5))
+        reliability_score = 1 if item["classified"] else 0.35
+        trend_score = 0.55
+        if item["pace_trend"] is not None:
+            trend_score = max(0, min(1, 0.55 - item["pace_trend"] / 3.0))
+        finish_bonus = max(0, 1 - ((item.get("finish_position", len(drivers)) - 1) / max(1, len(drivers) - 1)))
+        raw = (
+            pace_score * 0.42
+            + consistency_score * 0.20
+            + reliability_score * 0.18
+            + trend_score * 0.12
+            + finish_bonus * 0.08
+        )
+        prediction_rows.append({
+            "code": item["code"],
+            "score": raw,
+            "reason": _prediction_reason(item, pace_score, consistency_score, trend_score)
+        })
+
+    total_score = sum(max(0.001, r["score"]) for r in prediction_rows)
+    predictions = sorted([
+        {
+            "code": r["code"],
+            "win_chance": round(max(0.001, r["score"]) / total_score * 100, 1),
+            "reason": r["reason"],
+        }
+        for r in prediction_rows
+    ], key=lambda r: r["win_chance"], reverse=True)
+
+    return {
+        "drivers": sorted(drivers, key=lambda d: d.get("finish_position", 99)),
+        "classification": [{"position": d["finish_position"], "code": d["code"], "laps": d["completed_laps"]} for d in classification],
+        "predictions": predictions[:8],
+    }
+
+def _prediction_reason(item, pace_score, consistency_score, trend_score):
+    parts = []
+    if pace_score > 0.75:
+        parts.append("front-running pace")
+    elif pace_score < 0.35:
+        parts.append("pace deficit")
+    if consistency_score > 0.70:
+        parts.append("stable lap times")
+    elif consistency_score < 0.35:
+        parts.append("variable lap times")
+    if trend_score > 0.65:
+        parts.append("improving late pace")
+    elif trend_score < 0.45:
+        parts.append("fading late pace")
+    if not item["classified"]:
+        parts.append("reliability risk")
+    return ", ".join(parts[:3]) or "balanced replay form"
+
 def _compute_safety_car_positions(frames, track_statuses, session):
     if not frames or not track_statuses or not HAS_SCIPY:
         return
@@ -239,7 +377,7 @@ def _compute_safety_car_positions(frames, track_statuses, session):
         frame["sc"] = {"x": round(sc_x, 1), "y": round(sc_y, 1), "phase": phase, "alpha": round(alpha, 2)}
 
 def build_replay_data(year: int, race: str, session_type: str) -> dict:
-    cache_key  = hashlib.md5(f"{year}:{race}:{session_type}:v8".encode()).hexdigest()
+    cache_key  = hashlib.md5(f"{year}:{race}:{session_type}:v9".encode()).hexdigest()
     cache_file = os.path.join(REPLAY_DIR, f"{cache_key}.pkl")
 
     if os.path.exists(cache_file):
@@ -433,6 +571,8 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
             lap_copy["t"] = max(0.0, float(lap_copy.get("t", 0)) - global_t_min)
             driver_laps[code].append(lap_copy)
 
+    race_analysis = _build_race_analysis(driver_laps, total_laps)
+
     result = {
         "year":        year,
         "race":        race,
@@ -444,7 +584,8 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
         "t_max":       t_end,
         "frame_step":  SAMPLE_INTERVAL,
         "frames":      raw_frames,
-        "driver_laps": driver_laps
+        "driver_laps": driver_laps,
+        "race_analysis": race_analysis
     }
 
     try:
