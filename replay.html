@@ -52,6 +52,24 @@
     .weather-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; color: #ccc; }
     .weather-row span:last-child { color: #fff; font-weight: 600; }
 
+    /* Strategy Calls */
+    #strategyPanel {
+      top: 220px; right: 350px; width: 300px; max-height: calc(100vh - 360px);
+      display: none; flex-direction: column; gap: 10px;
+    }
+    .strategy-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .strategy-sub { color: #8b8b8b; font-size: 11px; font-weight: 600; }
+    .call-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px; }
+    .call-card { border: 1px solid rgba(255,255,255,0.12); border-left-width: 4px; border-radius: 6px; padding: 9px 10px; background: rgba(255,255,255,0.05); }
+    .call-card.priority { border-left-color: #22c55e; }
+    .call-card.watch { border-left-color: #f59e0b; }
+    .call-card.risk { border-left-color: #ef4444; }
+    .call-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .call-driver { font-size: 13px; font-weight: 800; letter-spacing: .3px; }
+    .call-tag { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #111; background: #ddd; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
+    .call-body { color: #d6d6d6; font-size: 12px; line-height: 1.35; }
+    .call-meta { color: #8b8b8b; font-size: 11px; margin-top: 5px; font-variant-numeric: tabular-nums; }
+
     /* Leaderboard Panel */
     #leaderboardPanel {
       top: 20px; right: 20px; width: 300px; height: calc(100vh - 40px);
@@ -207,6 +225,15 @@
     <div class="weather-row"><span>Rain</span><span id="wRin">--</span></div>
   </div>
 
+  <!-- Strategy Calls -->
+  <div id="strategyPanel" class="glass-panel">
+    <div class="strategy-head">
+      <div class="lb-title">Strategy Calls</div>
+      <div id="strategyLap" class="strategy-sub">Lap --</div>
+    </div>
+    <div id="strategyCalls" class="call-list"></div>
+  </div>
+
   <!-- Leaderboard -->
   <div id="leaderboardPanel" class="glass-panel" style="display: none;">
     <div class="lb-header">
@@ -272,6 +299,8 @@
       "BOT": "#52E252", "ZHO": "#52E252", "BOR": "#52E252",
       "MAG": "#B6BABD", "HUL": "#B6BABD", "BEA": "#B6BABD", "OAC": "#B6BABD"
     }
+    const tyreLife = { S: 22, M: 38, H: 52, I: 28, W: 20, "?": 35 }
+    const pitLossSecs = 22
 
     let replayData = null
     let currentRealTime = 0
@@ -402,6 +431,113 @@
       return `${m}:${s}`
     }
 
+    async function readReplayResponse(res) {
+      const text = await res.text()
+      let data = null
+      try {
+        data = text ? JSON.parse(text) : {}
+      } catch (err) {
+        throw new Error("Replay server returned unreadable data.")
+      }
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `Replay request failed (${res.status})`)
+      }
+      if (!Array.isArray(data.frames) || data.frames.length === 0) {
+        throw new Error("This replay has no usable frames. Try a different race or session.")
+      }
+      return data
+    }
+
+    function getDriverLapInfo(code, now) {
+      const laps = replayData?.driver_laps?.[code] || []
+      const done = laps.filter(l => typeof l.t === "number" && l.t <= now && l.time)
+      const latest = done[done.length - 1] || null
+      const recent = done.slice(-4)
+      const prev = done.slice(-8, -4)
+      const recentAvg = recent.length ? recent.reduce((sum, l) => sum + l.time, 0) / recent.length : null
+      const prevAvg = prev.length ? prev.reduce((sum, l) => sum + l.time, 0) / prev.length : null
+      return {
+        latest,
+        recentAvg,
+        prevAvg,
+        trend: recentAvg != null && prevAvg != null ? recentAvg - prevAvg : null,
+        age: latest?.age ?? null,
+        stint: latest?.stint ?? null
+      }
+    }
+
+    function makeCall(driver, title, kind, body, meta, score) {
+      return { driver, title, kind, body, meta, score }
+    }
+
+    function generateStrategyCalls(state) {
+      if (!replayData || !state?.drivers?.length) return []
+      const rain = state.weather && Number(state.weather.rainfall) > 0
+      const calls = []
+      state.drivers.forEach((d, i) => {
+        const ahead = i > 0 ? state.drivers[i - 1] : null
+        const behind = i < state.drivers.length - 1 ? state.drivers[i + 1] : null
+        const lapInfo = getDriverLapInfo(d.code, currentRealTime)
+        const tyre = d.tyre || "?"
+        const life = tyreLife[tyre] || 35
+        const age = lapInfo.age ?? Math.max(0, Math.round(d.d / 5000))
+        const usedPct = age / life
+        const trend = lapInfo.trend
+        const closingAhead = ahead && trend != null && getDriverLapInfo(ahead.code, currentRealTime).trend != null
+          ? getDriverLapInfo(ahead.code, currentRealTime).trend - trend
+          : null
+
+        if (rain && tyre !== "I" && tyre !== "W") {
+          calls.push(makeCall(d.code, "Box for wet tyre", "risk", "Rain is reported while this car is still on slicks.", `${tyre} tyre, lap ${d.lap}`, 95))
+          return
+        }
+
+        if (usedPct >= 1.05) {
+          calls.push(makeCall(d.code, "Pit now", "risk", "Tyre age is past the normal life window, so position loss risk grows every lap.", `${age}/${life} laps on ${tyre}`, 85 + Math.min(10, (usedPct - 1) * 20)))
+        } else if (usedPct >= 0.78) {
+          calls.push(makeCall(d.code, "Prepare stop", "watch", "Pit window is open. Watch for traffic before committing.", `${age}/${life} laps on ${tyre}`, 62 + usedPct * 10))
+        }
+
+        if (ahead && d.gapI > 0 && d.gapI < 3.5 && (trend == null || trend < 0.25)) {
+          const gain = closingAhead != null ? `, pace swing ${closingAhead.toFixed(2)}s/lap` : ""
+          calls.push(makeCall(d.code, "Undercut threat", "priority", `Close enough to pressure ${ahead.code}. A clean stop can attack track position.`, `Gap ${d.gapI.toFixed(1)}s${gain}`, 78 - d.gapI * 4))
+        }
+
+        if (behind && behind.gapI > 0 && behind.gapI < 2.5) {
+          calls.push(makeCall(d.code, "Defend position", "watch", `${behind.code} is inside attack range. Cover if the pit window is open.`, `Behind +${behind.gapI.toFixed(1)}s`, 70 - behind.gapI * 5))
+        }
+
+        if (ahead && d.gapI > 8 && d.gapI < pitLossSecs && trend != null && trend < -0.05 && usedPct < 0.85) {
+          calls.push(makeCall(d.code, "Stay out", "priority", "Current pace is improving and the car is outside immediate undercut range.", `Gap ahead ${d.gapI.toFixed(1)}s`, 58))
+        }
+      })
+      if (!calls.length) {
+        calls.push(makeCall("--", "Hold plan", "watch", "No urgent pit or attack signal at this timestamp.", "Keep watching gaps and tyre age", 1))
+      }
+      return calls.sort((a, b) => b.score - a.score).slice(0, 5)
+    }
+
+    function updateStrategyPanel(state) {
+      const panel = document.getElementById("strategyPanel")
+      const list = document.getElementById("strategyCalls")
+      if (!panel || !list || !state) return
+      panel.style.display = "flex"
+      const leaderLap = state.drivers[0]?.lap || 1
+      document.getElementById("strategyLap").textContent = `Lap ${leaderLap} / ${replayData.total_laps || "--"}`
+      list.innerHTML = generateStrategyCalls(state).map(call => {
+        const col = teamColors[call.driver] || "#ddd"
+        const tagBg = call.kind === "priority" ? "#86efac" : call.kind === "risk" ? "#fca5a5" : "#fcd34d"
+        return `<div class="call-card ${call.kind}">
+          <div class="call-top">
+            <div class="call-driver" style="color:${col}">${call.driver} · ${call.title}</div>
+            <div class="call-tag" style="background:${tagBg}">${call.kind}</div>
+          </div>
+          <div class="call-body">${call.body}</div>
+          <div class="call-meta">${call.meta}</div>
+        </div>`
+      }).join("")
+    }
+
     function setGapMode(mode) {
       gapMode = mode
       document.getElementById('togI').className = `lb-toggle ${mode==='I'?'active':''}`
@@ -436,15 +572,16 @@
 
       document.getElementById("loader").style.display = "flex"
       document.getElementById("weatherPanel").style.display = "none"
+      document.getElementById("strategyPanel").style.display = "none"
       document.getElementById("leaderboardPanel").style.display = "none"
       document.getElementById("playbackPanel").style.display = "none"
+      document.getElementById("loaderText").textContent = "Downloading Telemetry..."
       playing = false
       if (reqAnimFrame) cancelAnimationFrame(reqAnimFrame)
 
       try {
         const res = await fetch(`/api/replay_data?year=${year}&race=${encodeURIComponent(race)}&session=${sess}&v=${Date.now()}`)
-        const data = await res.json()
-        if (data.error) throw new Error(data.error)
+        const data = await readReplayResponse(res)
         
         replayData = data
         currentRealTime = 0
@@ -497,6 +634,7 @@
         document.getElementById("playbackPanel").style.display = "flex"
         document.getElementById("leaderboardPanel").style.display = "flex"
         document.getElementById("weatherPanel").style.display = "block"
+        document.getElementById("strategyPanel").style.display = "flex"
         
         togglePlay() // start playing
       } catch (e) {
@@ -578,12 +716,13 @@
 
       // Compute Gaps (Seconds = dist_m / 55.56 approximate)
       if (state.drivers.length > 0) {
+        const trackSamples = replayData.track_x?.length || 1000
         let refL = state.drivers[0]
         let L_prog = refL.lap + refL.trackProg
         for(let i=0; i<state.drivers.length; i++){
           let d = state.drivers[i]
           let prog = d.lap + d.trackProg
-          let rawGapToLeader = (L_prog - prog) * (replayData.track_x.length / 10) // approximate meters
+          let rawGapToLeader = (L_prog - prog) * (trackSamples / 10) // approximate meters
           d.gapL = rawGapToLeader / 55.56
           
           if (i === 0) {
@@ -591,7 +730,7 @@
           } else {
             let prev = state.drivers[i-1]
             let p_prog = prev.lap + prev.trackProg
-            let rawGapToInt = (p_prog - prog) * (replayData.track_x.length / 10)
+            let rawGapToInt = (p_prog - prog) * (trackSamples / 10)
             d.gapI = rawGapToInt / 55.56
           }
         }
@@ -748,6 +887,7 @@
       if (state.drivers.length > 0) {
         document.getElementById("lbLapCount").textContent = `${Math.max(1, state.drivers[0].lap)} / ${replayData.total_laps}`
       }
+      updateStrategyPanel(state)
 
       // Update Insights Chart
       if (selectedDrivers.length > 0 && chartInstance.canvas.offsetParent !== null) {

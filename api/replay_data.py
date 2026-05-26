@@ -7,11 +7,13 @@ import os
 import json
 import pickle
 import hashlib
+import math
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler
 
 import fastf1
 import numpy as np
+import pandas as pd
 
 try:
     from scipy.spatial import cKDTree
@@ -24,6 +26,21 @@ REPLAY_DIR  = "/tmp/replay_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(REPLAY_DIR, exist_ok=True)
 fastf1.Cache.enable_cache(CACHE_DIR)
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        value = float(value)
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return None
+    return value
 
 def _compute_safety_car_positions(frames, track_statuses, session):
     if not frames or not track_statuses or not HAS_SCIPY:
@@ -313,7 +330,7 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
             pass
 
     if not driver_data:
-        raise ValueError("No positive data found for drivers")
+        raise ValueError("No telemetry was available for this replay. Try another year, race, or session.")
 
     # Time bounds relative to global start
     all_t_raws = np.concatenate([d["t"] for d in driver_data.values()])
@@ -408,6 +425,14 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
     try: total_laps = int(sess.laps["LapNumber"].max())
     except Exception: pass
 
+    driver_laps = {}
+    for code, d in driver_data.items():
+        driver_laps[code] = []
+        for lap in d["lap_records"]:
+            lap_copy = dict(lap)
+            lap_copy["t"] = max(0.0, float(lap_copy.get("t", 0)) - global_t_min)
+            driver_laps[code].append(lap_copy)
+
     result = {
         "year":        year,
         "race":        race,
@@ -419,7 +444,7 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
         "t_max":       t_end,
         "frame_step":  SAMPLE_INTERVAL,
         "frames":      raw_frames,
-        "driver_laps": {code: d["lap_records"] for code, d in driver_data.items()}
+        "driver_laps": driver_laps
     }
 
     try:
@@ -448,10 +473,8 @@ class handler(BaseHTTPRequestHandler):
             session_type = "R"
 
         try:
-            data = build_replay_data(year, race, session_type)
-            # Remove NaN values by dumping with a custom function or just relying on json handling
-            # Python json doesn't support NaNs officially if client rejects it, let's just dump
-            clean_data_str = json.dumps(data, allow_nan=False).replace("NaN", "null")
+            data = _json_safe(build_replay_data(year, race, session_type))
+            clean_data_str = json.dumps(data, allow_nan=False)
             self._send(200, clean_data_str, direct=True)
         except ValueError as exc:
             self._send(404, json.dumps({"error": str(exc)}))

@@ -53,6 +53,8 @@ class DevHandler(BaseHTTPRequestHandler):
                 race = qs.get('race', ['Australian Grand Prix'])[0]
                 session = qs.get('session', ['R'])[0].upper()
                 data = mod.build_replay_data(year, race, session)
+                if hasattr(mod, '_json_safe'):
+                    data = mod._json_safe(data)
                 body = json.dumps(data, allow_nan=False).replace('NaN', 'null').encode()
             elif module_name == 'race_data':
                 # Fallback for race_data
@@ -103,10 +105,10 @@ class DevHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def log_message(self, format: str, *args) -> None:
-        print(f"[DEV] {self.command} {self.path} → {args[0] if len(args) > 0 else ''}")
+        print(f"[DEV] {self.command} {self.path} -> {args[0] if len(args) > 0 else ''}")
 
 if __name__ == '__main__':
-    print(f"🏎️  F1 Dashboard Dev Server running on http://localhost:{PORT}")
+    print(f"F1 Dashboard Dev Server running on http://localhost:{PORT}")
     print(f"   Open: http://localhost:{PORT}/replay.html")
     print(f"   Press Ctrl+C to stop")
     server = HTTPServer(('', PORT), DevHandler)
