@@ -3,17 +3,70 @@ import pandas as pd
 import json
 import time
 import sys
+import threading
+import asyncio
+from fastf1.livetiming.client import SignalRClient
+from fastf1.livetiming.data import LiveTimingData
+
+import datetime
 
 fastf1.Cache.enable_cache("cache")
 
-YEAR = 2026
-RACE = "Australia"
+def get_current_race():
+    today = datetime.date.today()
+    year  = today.year
+    try:
+        schedule = fastf1.get_event_schedule(year, include_testing=False)
+        for _, row in schedule.iterrows():
+            event_date = row["EventDate"]
+            if hasattr(event_date, "date"):
+                event_date = event_date.date()
+            delta = (event_date - today).days
+            if -3 <= delta <= 4:
+                return year, row["EventName"]
+        past = schedule[schedule["EventDate"].apply(
+            lambda d: (d.date() if hasattr(d, "date") else d) < today
+        )]
+        if not past.empty:
+            row = past.iloc[-1]
+            return year, row["EventName"]
+    except Exception as e:
+        print("Schedule lookup failed:", e)
+    return 2026, "Australia"
+
+YEAR, RACE = get_current_race()
 SESSION = sys.argv[1].upper() if len(sys.argv) > 1 else "R"
 
-print("Loading session...")
+# Define the live stream file
+LIVE_FILE = "live_stream.txt"
+
+# Clear old live stream data
+with open(LIVE_FILE, "w") as f:
+    f.write("")
+
+# Start the SignalR Client in a background thread
+def run_client():
+    asyncio.run(SignalRClient(LIVE_FILE, debug=False).start())
+
+client_thread = threading.Thread(target=run_client, daemon=True)
+client_thread.start()
+
+print("Waiting 10 seconds for live stream to connect and F1 authentication (if required)...")
+time.sleep(10)
+
+print("Loading session with live data stream...")
+session_loaded = False
 session = fastf1.get_session(YEAR, RACE, SESSION)
-session.load()
-print("Session loaded")
+while not session_loaded:
+    try:
+        live_data = LiveTimingData(LIVE_FILE)
+        session.load(livedata=live_data)
+        print(f"Session loaded for {YEAR} {RACE} - {SESSION}")
+        session_loaded = True
+    except Exception as e:
+        print(f"Session not yet available or loading error: {e}")
+        print("Retrying in 10 seconds...")
+        time.sleep(10)
 
 try:
     fastest  = session.laps.pick_fastest()
@@ -64,7 +117,7 @@ def _secs(td):
 while True:
     # Refresh live session data every cycle so we pick up new laps/telemetry
     try:
-        session.load(livedata=None)   # safe no-op on finished sessions
+        session.load(livedata=live_data)
     except Exception as e:
         print("Session reload warning:", e)
 

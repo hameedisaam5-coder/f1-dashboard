@@ -41,6 +41,8 @@ class DevHandler(BaseHTTPRequestHandler):
                 module_name, 
                 os.path.join(PROJECT_ROOT, 'api', f'{module_name}.py')
             )
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Could not load module {module_name}")
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
 
@@ -100,8 +102,8 @@ class DevHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, fmt, *args):
-        print(f"[DEV] {self.command} {self.path} → {args[1] if len(args) > 1 else ''}")
+    def log_message(self, format: str, *args) -> None:
+        print(f"[DEV] {self.command} {self.path} → {args[0] if len(args) > 0 else ''}")
 
 if __name__ == '__main__':
     print(f"🏎️  F1 Dashboard Dev Server running on http://localhost:{PORT}")

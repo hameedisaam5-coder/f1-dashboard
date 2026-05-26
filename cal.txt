@@ -1,21 +1,25 @@
-Today is: 2026-03-14
-Event: Australian Grand Prix
-  EventDate: 2026-03-08 (Delta: -6 days)
-  EventFormat: conventional
----
-Event: Chinese Grand Prix
-  EventDate: 2026-03-15 (Delta: 1 days)
-  EventFormat: sprint_qualifying
----
-Event: Japanese Grand Prix
-  EventDate: 2026-03-29 (Delta: 15 days)
-  EventFormat: conventional
----
-Event: Bahrain Grand Prix
-  EventDate: 2026-04-12 (Delta: 29 days)
-  EventFormat: conventional
----
-Event: Saudi Arabian Grand Prix
-  EventDate: 2026-04-19 (Delta: 36 days)
-  EventFormat: conventional
----
+Today is 2026-03-15
+Australian Grand Prix - Date: 2026-03-08 - Delta: -7
+Chinese Grand Prix - Date: 2026-03-15 - Delta: 0
+Japanese Grand Prix - Date: 2026-03-29 - Delta: 14
+Bahrain Grand Prix - Date: 2026-04-12 - Delta: 28
+Saudi Arabian Grand Prix - Date: 2026-04-19 - Delta: 35
+Miami Grand Prix - Date: 2026-05-03 - Delta: 49
+Canadian Grand Prix - Date: 2026-05-24 - Delta: 70
+Monaco Grand Prix - Date: 2026-06-07 - Delta: 84
+Barcelona Grand Prix - Date: 2026-06-14 - Delta: 91
+Austrian Grand Prix - Date: 2026-06-28 - Delta: 105
+British Grand Prix - Date: 2026-07-05 - Delta: 112
+Belgian Grand Prix - Date: 2026-07-19 - Delta: 126
+Hungarian Grand Prix - Date: 2026-07-26 - Delta: 133
+Dutch Grand Prix - Date: 2026-08-23 - Delta: 161
+Italian Grand Prix - Date: 2026-09-06 - Delta: 175
+Spanish Grand Prix - Date: 2026-09-13 - Delta: 182
+Azerbaijan Grand Prix - Date: 2026-09-26 - Delta: 195
+Singapore Grand Prix - Date: 2026-10-11 - Delta: 210
+United States Grand Prix - Date: 2026-10-25 - Delta: 224
+Mexico City Grand Prix - Date: 2026-11-01 - Delta: 231
+São Paulo Grand Prix - Date: 2026-11-08 - Delta: 238
+Las Vegas Grand Prix - Date: 2026-11-21 - Delta: 251
+Qatar Grand Prix - Date: 2026-11-29 - Delta: 259
+Abu Dhabi Grand Prix - Date: 2026-12-06 - Delta: 266

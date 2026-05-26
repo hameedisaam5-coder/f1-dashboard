@@ -12,3 +12,6 @@ race_data.json
 # Python virtual envs
 venv/
 .env/
+
+.vercel
+.env*.local

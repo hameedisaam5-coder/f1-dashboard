@@ -222,7 +222,7 @@ def _compute_safety_car_positions(frames, track_statuses, session):
         frame["sc"] = {"x": round(sc_x, 1), "y": round(sc_y, 1), "phase": phase, "alpha": round(alpha, 2)}
 
 def build_replay_data(year: int, race: str, session_type: str) -> dict:
-    cache_key  = hashlib.md5(f"{year}:{race}:{session_type}:v7".encode()).hexdigest()
+    cache_key  = hashlib.md5(f"{year}:{race}:{session_type}:v8".encode()).hexdigest()
     cache_file = os.path.join(REPLAY_DIR, f"{cache_key}.pkl")
 
     if os.path.exists(cache_file):
@@ -275,17 +275,37 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
                 dst_raw = all_tel["Distance"].to_numpy(dtype=float)
             else:
                 dst_raw = np.zeros(len(t_raw))
+                
+            drs_raw = all_tel["DRS"].to_numpy(dtype=float) if "DRS" in all_tel.columns else np.zeros(len(t_raw))
             
             drv_session_times = drv_laps["Time"].dt.total_seconds().to_numpy()
             drv_lap_nums = drv_laps["LapNumber"].to_numpy()
             drv_compounds = drv_laps["Compound"].to_numpy()
 
+            # Build full lap history for strategy 
+            lap_records = []
+            for _, rl in drv_laps.iterrows():
+                if pd.isna(rl["LapTime"]):
+                    continue
+                lap_records.append({
+                    "lap": int(rl["LapNumber"]) if pd.notna(rl["LapNumber"]) else 0,
+                    "t": float(rl["Time"].total_seconds()) if pd.notna(rl["Time"]) else 0,
+                    "time": float(rl["LapTime"].total_seconds()),
+                    "tyre": str(rl["Compound"]),
+                    "age": int(rl["TyreLife"]) if pd.notna(rl["TyreLife"]) else 0,
+                    "stint": int(rl["Stint"]) if pd.notna(rl["Stint"]) else 0,
+                    "s1": float(rl["Sector1Time"].total_seconds()) if pd.notna(rl["Sector1Time"]) else None,
+                    "s2": float(rl["Sector2Time"].total_seconds()) if pd.notna(rl["Sector2Time"]) else None,
+                    "s3": float(rl["Sector3Time"].total_seconds()) if pd.notna(rl["Sector3Time"]) else None,
+                })
+
             if len(t_raw) < 2: continue
 
             driver_data[code] = {
                 "t": t_raw, "x": x_raw, "y": y_raw, "s": s_raw, 
-                "thr": thr_raw, "brk": brk_raw, "ger": ger_raw, "dst": dst_raw,
-                "laps": (drv_session_times, drv_lap_nums, drv_compounds)
+                "thr": thr_raw, "brk": brk_raw, "ger": ger_raw, "dst": dst_raw, "drs": drs_raw,
+                "laps": (drv_session_times, drv_lap_nums, drv_compounds),
+                "lap_records": lap_records
             }
             if global_t_min is None or t_raw[0] < global_t_min:
                 global_t_min = t_raw[0]
@@ -342,6 +362,7 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
         brk_s = np.interp(timeline, t_shifted, d["brk"])
         ger_s = np.round(np.interp(timeline, t_shifted, d["ger"]))
         dst_s = np.interp(timeline, t_shifted, d["dst"])
+        drs_s = np.round(np.interp(timeline, t_shifted, d["drs"]))
         
         drv_session_times, drv_lap_nums, drv_compounds = d["laps"]
         drv_session_times_shifted = drv_session_times - global_t_min
@@ -361,6 +382,7 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
                 "b": int(brk_s[i]),
                 "g": int(ger_s[i]),
                 "d": float(dst_s[i]),
+                "drs": int(drs_s[i]),
                 "tyre": str(comp_samples[i])[0] if comp_samples[i] and str(comp_samples[i]) != "nan" else "?",
                 "lap": int(lap_samples[i]) if lap_samples[i] and str(lap_samples[i]) != "nan" else 0,
             })
@@ -397,6 +419,7 @@ def build_replay_data(year: int, race: str, session_type: str) -> dict:
         "t_max":       t_end,
         "frame_step":  SAMPLE_INTERVAL,
         "frames":      raw_frames,
+        "driver_laps": {code: d["lap_records"] for code, d in driver_data.items()}
     }
 
     try:
