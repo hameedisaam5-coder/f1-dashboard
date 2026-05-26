@@ -2,1054 +2,895 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>F1 Race Replay V2</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F1 Race Replay Studio</title>
+  <meta name="description" content="Race replay telemetry, strategy, and performance analysis.">
   <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
-      margin: 0; padding: 0; background: #000; color: #fff; font-family: 'Inter', sans-serif;
-      overflow: hidden; user-select: none;
+      margin: 0;
+      background: #07080b;
+      color: #f6f7fb;
+      font-family: Arial, Helvetica, sans-serif;
+      overflow: hidden;
     }
-    
-    /* Fullscreen Canvas */
-    #replayCanvas {
-      display: block; width: 100vw; height: 100vh; cursor: grab;
+    button, select, input { font: inherit; }
+    button, select {
+      background: #171923;
+      color: #f6f7fb;
+      border: 1px solid #303442;
+      border-radius: 6px;
+      padding: 8px 10px;
     }
-    #replayCanvas:active { cursor: grabbing; }
-
-    /* Floating Glass Panels */
-    .glass-panel {
+    button { cursor: pointer; font-weight: 700; }
+    button:hover { background: #222636; }
+    button.primary { background: #e10600; border-color: #ff332e; }
+    button.primary:hover { background: #ff1f18; }
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100%;
+      min-width: 980px;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid #222634;
+      background: #0e1017;
+    }
+    .brand {
+      width: 220px;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: .02em;
+    }
+    .status {
+      margin-left: auto;
+      color: #a7adbd;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .main {
+      display: grid;
+      grid-template-columns: 330px 1fr 360px;
+      min-height: 0;
+    }
+    .panel {
+      border-color: #222634;
+      background: #0e1017;
+      min-height: 0;
+      overflow: auto;
+    }
+    .left { border-right: 1px solid #222634; }
+    .right { border-left: 1px solid #222634; }
+    .section { padding: 14px; border-bottom: 1px solid #222634; }
+    .section h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #a7adbd;
+    }
+    .canvas-wrap {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      background: #020306;
+    }
+    #trackCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    .loader {
       position: absolute;
-      background: rgba(20, 20, 20, 0.7);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,255,255,0.1);
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(3,4,8,.88);
+      z-index: 4;
+      text-align: center;
+      padding: 24px;
+    }
+    .loader.show { display: flex; }
+    .loader-box {
+      width: min(520px, 90%);
+      border: 1px solid #303442;
       border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      z-index: 10;
+      background: #10131d;
+      padding: 18px;
+      box-shadow: 0 20px 80px rgba(0,0,0,.45);
     }
-
-    /* Top Bar - Controls & Load */
-    #topBar {
-      top: 20px; left: 20px;
-      display: flex; gap: 12px; align-items: center;
+    .loader-title { font-size: 18px; font-weight: 900; margin-bottom: 8px; }
+    .loader-text { color: #a7adbd; line-height: 1.5; }
+    .track-hud {
+      position: absolute;
+      left: 14px;
+      bottom: 14px;
+      display: flex;
+      gap: 8px;
+      z-index: 2;
     }
-    select, button {
-      background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);
-      padding: 6px 12px; border-radius: 4px; font-size: 14px; outline: none; cursor: pointer;
+    .pill {
+      border: 1px solid #303442;
+      border-radius: 999px;
+      background: rgba(14,16,23,.86);
+      color: #d7dbea;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
     }
-    select option { background: #111; }
-    button:hover { background: rgba(255,255,255,0.2); }
-    .btn-red { background: #e10600; border-color: #ff1a1a; font-weight: bold; }
-    .btn-red:hover { background: #ff1a1a; }
-
-    /* Race Intelligence */
-    #raceIntelPanel {
-      top: 86px; left: 20px; width: 330px; max-height: calc(100vh - 260px);
-      display: none; flex-direction: column; gap: 12px;
+    .controls {
+      display: grid;
+      grid-template-columns: auto auto 1fr auto auto auto;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-top: 1px solid #222634;
+      background: #0e1017;
     }
-    .intel-section { display: flex; flex-direction: column; gap: 8px; }
-    .intel-title { font-size: 12px; color: #9ca3af; text-transform: uppercase; font-weight: 800; letter-spacing: .06em; }
-    .prediction-row, .driver-row {
-      display: grid; grid-template-columns: 42px 1fr 52px; gap: 8px; align-items: center;
-      font-size: 12px; padding: 7px 8px; border: 1px solid rgba(255,255,255,.09); border-radius: 6px;
-      background: rgba(255,255,255,.04);
+    #scrubber {
+      width: 100%;
+      accent-color: #e10600;
     }
-    .prediction-code, .driver-code-small { font-weight: 900; }
-    .prediction-reason, .driver-meta { color: #9ca3af; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .prediction-chance { text-align: right; font-variant-numeric: tabular-nums; font-weight: 800; }
-    .selected-card { border: 1px solid rgba(255,255,255,.12); border-radius: 6px; padding: 10px; background: rgba(0,0,0,.22); }
-    .selected-name { font-size: 18px; font-weight: 900; margin-bottom: 8px; }
-    .metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
-    .metric { background: rgba(255,255,255,.05); border-radius: 5px; padding: 7px; }
-    .metric-label { color: #9ca3af; font-size: 10px; text-transform: uppercase; font-weight: 800; }
-    .metric-value { margin-top: 2px; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
-
-    /* Weather Panel */
-    #weatherPanel {
-      top: 20px; right: 350px; width: 200px;
+    .time {
+      width: 58px;
+      text-align: center;
+      color: #d7dbea;
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
     }
-    .weather-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; color: #ccc; }
-    .weather-row span:last-child { color: #fff; font-weight: 600; }
-
-    /* Strategy Calls */
-    #strategyPanel {
-      top: 220px; right: 350px; width: 300px; max-height: calc(100vh - 360px);
-      display: none; flex-direction: column; gap: 10px;
+    .leader-row {
+      display: grid;
+      grid-template-columns: 32px 50px 1fr 46px 42px;
+      gap: 6px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
     }
-    .strategy-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-    .strategy-sub { color: #8b8b8b; font-size: 11px; font-weight: 600; }
-    .call-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px; }
-    .call-card { border: 1px solid rgba(255,255,255,0.12); border-left-width: 4px; border-radius: 6px; padding: 9px 10px; background: rgba(255,255,255,0.05); }
-    .call-card.priority { border-left-color: #22c55e; }
-    .call-card.watch { border-left-color: #f59e0b; }
-    .call-card.risk { border-left-color: #ef4444; }
-    .call-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .call-driver { font-size: 13px; font-weight: 800; letter-spacing: .3px; }
-    .call-tag { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #111; background: #ddd; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
-    .call-body { color: #d6d6d6; font-size: 12px; line-height: 1.35; }
-    .call-meta { color: #8b8b8b; font-size: 11px; margin-top: 5px; font-variant-numeric: tabular-nums; }
-
-    /* Leaderboard Panel */
-    #leaderboardPanel {
-      top: 20px; right: 20px; width: 300px; height: calc(100vh - 40px);
-      display: flex; flex-direction: column; padding: 12px;
+    .leader-row:hover { background: #171923; }
+    .leader-row.selected { border-color: #f6f7fb; background: #1c2130; }
+    .pos, .gap, .lap, .metric-value, .chance { font-variant-numeric: tabular-nums; }
+    .code { font-weight: 900; }
+    .gap, .lap { color: #a7adbd; text-align: right; }
+    .tyre {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border: 2px solid #777;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 900;
+      color: #fff;
     }
-    .lb-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .lb-title { font-size: 18px; font-weight: 700; }
-    
-    .lb-toggles { display: flex; gap: 8px; }
-    .lb-toggle { 
-      width: 24px; height: 24px; border-radius: 50%; font-size: 11px; font-weight: bold;
-      display: flex; align-items: center; justify-content: center;
-      background: #333; border: 2px solid #555; cursor: pointer;
-    }
-    .lb-toggle.active { background: #22c55e; border-color: #4ade80; color: #000; }
-
-    .lb-content {
-      flex: 1; overflow-y: auto; overflow-x: hidden;
-      display: flex; flex-direction: column; padding-right: 4px; gap: 4px;
-    }
-    .lb-content::-webkit-scrollbar { width: 4px; }
-    .lb-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
-
-    .lb-row {
-      display: flex; align-items: center; font-size: 13px; padding: 4px 6px;
-      border-radius: 4px; border: 1px solid transparent; cursor: pointer; transition: all 0.1s;
-    }
-    .lb-row:hover { background: rgba(255,255,255,0.05); }
-    .lb-row.selected { background: rgba(255,255,255,0.15); border-color: #888; }
-    
-    .lb-pos { width: 24px; font-weight: 600; text-align: right; margin-right: 8px; color: #aaa; }
-    .lb-code { width: 40px; font-weight: bold; }
-    .lb-gap { flex: 1; text-align: right; color: #bbb; margin-right: 12px; font-variant-numeric: tabular-nums; }
-    
-    .lb-drs { width: 8px; height: 8px; border-radius: 50%; background: #444; margin-right: 8px; }
-    .lb-drs.active { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
-
-    .lb-tyre-wrapper { position: relative; width: 24px; height: 24px; margin-right: 6px; }
-    .lb-tyre { 
-      width: 100%; height: 100%; border-radius: 50%; border: 2px solid; 
-      display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold;
-      color: #fff; background: rgba(0,0,0,0.5); position: absolute; top:0; left:0;
-    }
-    .lb-tyre-bg { opacity: 0.3; } /* the greyed out background tyre */
-    .lb-tyre-fg { clip-path: inset(0 0 0 0); transition: clip-path 0.2s; } /* the bright foreground tyre */
-    
     .tyre-S { border-color: #ff2800; }
-    .tyre-M { border-color: #f6d15a; }
-    .tyre-H { border-color: #ffffff; }
-    .tyre-I { border-color: #00a651; }
-    .tyre-W { border-color: #0072ce; }
-    
-    .lb-age { font-size: 10px; font-weight: bold; width: 14px; text-align: center;}
-
-    /* Controls Legend */
-    #legendPanel {
-      bottom: 20px; left: 20px; width: 220px;
+    .tyre-M { border-color: #f6d15a; color: #f6d15a; }
+    .tyre-H { border-color: #f6f7fb; }
+    .tyre-I { border-color: #00a651; color: #7df5a0; }
+    .tyre-W { border-color: #0072ce; color: #74bcff; }
+    .cards { display: grid; gap: 8px; }
+    .card {
+      border: 1px solid #2a2f3d;
+      border-radius: 7px;
+      background: #11141e;
+      padding: 10px;
     }
-    .legend-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; color: #aaa; }
-    .legend-row strong { color: #fff; }
-
-    /* Bottom Playback Scrubber */
-    #playbackPanel {
-      bottom: 20px; left: 260px; right: 350px;
-      display: flex; gap: 16px; align-items: center; padding: 12px 20px;
+    .card-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-weight: 900;
+      margin-bottom: 6px;
     }
-    .time-disp { font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; width: 55px; }
-
-    /* Range slider custom styling */
-    input[type=range] {
-      -webkit-appearance: none; flex: 1; background: transparent; cursor: pointer;
+    .muted { color: #a7adbd; }
+    .small { font-size: 12px; line-height: 1.45; }
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .metric {
+      border: 1px solid #252a38;
+      border-radius: 6px;
+      padding: 8px;
+      background: #0b0d13;
     }
-    input[type=range]::-webkit-slider-runnable-track {
-      width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px;
+    .metric-label {
+      color: #a7adbd;
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 800;
     }
-    input[type=range]::-webkit-slider-thumb {
-      height: 16px; width: 16px; border-radius: 50%; background: #e10600;
-      -webkit-appearance: none; margin-top: -5px; box-shadow: 0 0 8px #e10600;
-      transition: transform 0.1s;
+    .metric-value { margin-top: 3px; font-weight: 900; }
+    #telemetryCanvas {
+      display: block;
+      width: 100%;
+      height: 190px;
+      border: 1px solid #252a38;
+      border-radius: 6px;
+      background: #090b11;
     }
-    input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); }
-
-    /* Loading Overlay */
-    #loader {
-      position: absolute; inset: 0; background: #000; z-index: 50;
-      display: none; flex-direction: column; align-items: center; justify-content: center;
+    .prediction-row {
+      display: grid;
+      grid-template-columns: 44px 1fr 58px;
+      gap: 8px;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid #222634;
+      font-size: 13px;
     }
-    .spinner {
-      width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.1); 
-      border-top-color: #e10600; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px;
+    .prediction-row:last-child { border-bottom: 0; }
+    .chance { text-align: right; font-weight: 900; }
+    .call { border-left: 4px solid #f59e0b; }
+    .call.attack { border-left-color: #22c55e; }
+    .call.risk { border-left-color: #ef4444; }
+    .footer-note {
+      color: #777f92;
+      font-size: 11px;
+      line-height: 1.45;
+      margin-top: 8px;
     }
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-
-    /* Insights Modal */
-    #insightsModal {
-      position: absolute; inset: 10%; background: rgba(10,10,10,0.95);
-      backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px;
-      z-index: 100; display: none; flex-direction: column; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    @media (max-width: 1100px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100%; min-width: 0; }
+      .main { grid-template-columns: 1fr; }
+      .panel { max-height: none; }
+      .canvas-wrap { height: 520px; }
+      .controls { grid-template-columns: auto auto 1fr auto; }
+      .brand { width: auto; }
+      .status { display: none; }
     }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .modal-header h2 { margin: 0; font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 12px;}
-    .close-btn { background: #333; border: none; font-size: 24px; width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: 0.2s;}
-    .close-btn:hover { background: #e10600; }
-    
-    .chart-container { flex: 1; position: relative; width: 100%; min-height: 0; }
-    #selectedSummary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin-bottom: 16px; }
-    .summary-box { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 6px; padding: 10px; }
-    .summary-label { color: #9ca3af; font-size: 11px; text-transform: uppercase; font-weight: 800; }
-    .summary-value { margin-top: 4px; font-size: 16px; font-weight: 900; font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">F1 Race Replay Studio</div>
+      <select id="yearSelect" aria-label="Year">
+        <option value="2024" selected>2024</option>
+        <option value="2025">2025</option>
+        <option value="2026">2026</option>
+      </select>
+      <select id="raceSelect" aria-label="Race">
+        <option value="Italian Grand Prix" selected>Italian Grand Prix</option>
+        <option value="Australian Grand Prix">Australian Grand Prix</option>
+        <option value="Bahrain Grand Prix">Bahrain Grand Prix</option>
+        <option value="Saudi Arabian Grand Prix">Saudi Arabian Grand Prix</option>
+        <option value="Japanese Grand Prix">Japanese Grand Prix</option>
+        <option value="Chinese Grand Prix">Chinese Grand Prix</option>
+        <option value="Miami Grand Prix">Miami Grand Prix</option>
+        <option value="Emilia Romagna Grand Prix">Emilia Romagna Grand Prix</option>
+        <option value="Monaco Grand Prix">Monaco Grand Prix</option>
+        <option value="Canadian Grand Prix">Canadian Grand Prix</option>
+        <option value="Spanish Grand Prix">Spanish Grand Prix</option>
+        <option value="Austrian Grand Prix">Austrian Grand Prix</option>
+        <option value="British Grand Prix">British Grand Prix</option>
+        <option value="Hungarian Grand Prix">Hungarian Grand Prix</option>
+        <option value="Belgian Grand Prix">Belgian Grand Prix</option>
+        <option value="Dutch Grand Prix">Dutch Grand Prix</option>
+        <option value="Azerbaijan Grand Prix">Azerbaijan Grand Prix</option>
+        <option value="Singapore Grand Prix">Singapore Grand Prix</option>
+        <option value="United States Grand Prix">United States Grand Prix</option>
+        <option value="Mexico City Grand Prix">Mexico City Grand Prix</option>
+        <option value="Sao Paulo Grand Prix">Sao Paulo Grand Prix</option>
+        <option value="Las Vegas Grand Prix">Las Vegas Grand Prix</option>
+        <option value="Qatar Grand Prix">Qatar Grand Prix</option>
+        <option value="Abu Dhabi Grand Prix">Abu Dhabi Grand Prix</option>
+      </select>
+      <select id="sessionSelect" aria-label="Session">
+        <option value="R" selected>Race</option>
+        <option value="S">Sprint</option>
+        <option value="Q">Qualifying</option>
+      </select>
+      <button id="loadBtn" class="primary">Load replay</button>
+      <div id="statusText" class="status">Ready</div>
+    </header>
 
-  <!-- Fullscreen Canvas -->
-  <canvas id="replayCanvas"></canvas>
+    <main class="main">
+      <aside class="panel left">
+        <section class="section">
+          <h2>Leaderboard</h2>
+          <div id="leaderboard" class="cards"></div>
+        </section>
+        <section class="section">
+          <h2>Next race form</h2>
+          <div id="predictions"></div>
+          <div class="footer-note">This is a replay-form model, not a betting model. It scores pace, consistency, late-race trend, finishing position, and reliability from the loaded race.</div>
+        </section>
+      </aside>
 
-  <!-- Top Bar -->
-  <div id="topBar" class="glass-panel">
-    <a href="/replay.html" class="text-xs text-gray-400 hover:text-white mr-4 flex items-center gap-1">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-      Replay
-    </a>
-    <select id="selYear">
-      <option value="2025" selected>2025</option>
-      <option value="2024">2024</option>
-      <option value="2026">2026</option>
-    </select>
-    <select id="selRace">
-      <option value="Australian Grand Prix" selected>Australian Grand Prix</option>
-      <option value="Bahrain Grand Prix">Bahrain Grand Prix</option>
-      <option value="Saudi Arabian Grand Prix">Saudi Arabian Grand Prix</option>
-      <option value="Japanese Grand Prix">Japanese Grand Prix</option>
-      <option value="Chinese Grand Prix">Chinese Grand Prix</option>
-      <option value="Miami Grand Prix">Miami Grand Prix</option>
-      <option value="Emilia Romagna Grand Prix">Emilia Romagna Grand Prix</option>
-      <option value="Monaco Grand Prix">Monaco Grand Prix</option>
-      <option value="Canadian Grand Prix">Canadian Grand Prix</option>
-      <option value="Spanish Grand Prix">Spanish Grand Prix</option>
-      <option value="Austrian Grand Prix">Austrian Grand Prix</option>
-      <option value="British Grand Prix">British Grand Prix</option>
-    </select>
-    <select id="selSession">
-      <option value="R" selected>Race (R)</option>
-      <option value="S">Sprint (S)</option>
-      <option value="Q">Qualifying (Q)</option>
-    </select>
-    <button id="btnLoad" class="btn-red" onclick="loadReplay()">LOAD REPLAY</button>
-  </div>
+      <section class="canvas-wrap">
+        <canvas id="trackCanvas"></canvas>
+        <div class="track-hud">
+          <div id="lapHud" class="pill">Lap --</div>
+          <div id="weatherHud" class="pill">Weather --</div>
+          <div id="selectedHud" class="pill">Select a driver</div>
+        </div>
+        <div id="loader" class="loader show">
+          <div class="loader-box">
+            <div id="loaderTitle" class="loader-title">Loading replay</div>
+            <div id="loaderText" class="loader-text">Preparing a known working race first. This can take a little while the first time FastF1 reads telemetry.</div>
+          </div>
+        </div>
+      </section>
 
-  <!-- Race Intelligence -->
-  <div id="raceIntelPanel" class="glass-panel">
-    <div class="lb-title">Race Intelligence</div>
-    <div class="intel-section">
-      <div class="intel-title">Next race form model</div>
-      <div id="predictionList"></div>
-    </div>
-    <div class="intel-section">
-      <div class="intel-title">Selected driver</div>
-      <div id="selectedDriverCard" class="selected-card">
-        <div class="driver-meta">Select a driver on the leaderboard to inspect pace, consistency, tyres, and replay telemetry.</div>
-      </div>
-    </div>
-  </div>
+      <aside class="panel right">
+        <section class="section">
+          <h2>Selected driver</h2>
+          <div id="driverDetails" class="cards"></div>
+        </section>
+        <section class="section">
+          <h2>Telemetry window</h2>
+          <canvas id="telemetryCanvas"></canvas>
+          <div class="footer-note">White: speed. Green: throttle. Red: brake. The chart follows the selected driver around the current replay timestamp.</div>
+        </section>
+        <section class="section">
+          <h2>Strategy calls</h2>
+          <div id="strategyCalls" class="cards"></div>
+        </section>
+      </aside>
+    </main>
 
-  <!-- Weather Panel -->
-  <div id="weatherPanel" class="glass-panel" style="display: none;">
-    <div class="lb-title mb-3">Weather</div>
-    <div class="weather-row"><span>Air Temp</span><span id="wAir">-- °C</span></div>
-    <div class="weather-row"><span>Track Temp</span><span id="wTrk">-- °C</span></div>
-    <div class="weather-row"><span>Humidity</span><span id="wHum">-- %</span></div>
-    <div class="weather-row"><span>Wind</span><span id="wWnd">-- km/h</span></div>
-    <div class="weather-row"><span>Rain</span><span id="wRin">--</span></div>
-  </div>
-
-  <!-- Strategy Calls -->
-  <div id="strategyPanel" class="glass-panel">
-    <div class="strategy-head">
-      <div class="lb-title">Strategy Calls</div>
-      <div id="strategyLap" class="strategy-sub">Lap --</div>
-    </div>
-    <div id="strategyCalls" class="call-list"></div>
-  </div>
-
-  <!-- Leaderboard -->
-  <div id="leaderboardPanel" class="glass-panel" style="display: none;">
-    <div class="lb-header">
-      <div class="lb-title">Leaderboard</div>
-      <div class="lb-toggles">
-        <div id="togI" class="lb-toggle active" title="Interval" onclick="setGapMode('I')">I</div>
-        <div id="togL" class="lb-toggle" title="Leader" onclick="setGapMode('L')">L</div>
-      </div>
-    </div>
-    <div id="lbContent" class="lb-content"></div>
-    <div class="mt-2 text-xs text-center text-gray-500">Lap <span id="lbLapCount">1</span></div>
-  </div>
-
-  <!-- Legend -->
-  <div id="legendPanel" class="glass-panel">
-    <div class="lb-title mb-2" style="font-size: 14px;">Controls</div>
-    <div class="legend-row"><span>Play / Pause</span><strong>Space</strong></div>
-    <div class="legend-row"><span>Scrub Timeline</span><strong>← / →</strong></div>
-    <div class="legend-row"><span>Speed Modes</span><strong>1, 2, 3, 4</strong></div>
-    <div class="legend-row"><span>Pan Camera</span><strong>Drag</strong></div>
-    <div class="legend-row"><span>Zoom</span><strong>Scroll</strong></div>
-    <div class="legend-row"><span>View Telemetry</span><strong>Click Driver</strong></div>
-    <button onclick="document.getElementById('insightsModal').style.display='flex'" class="w-full mt-3 bg-gray-800 hover:bg-gray-700 text-xs py-1 rounded">Open Insights</button>
-  </div>
-
-  <!-- Playback Scrubber -->
-  <div id="playbackPanel" class="glass-panel" style="display: none;">
-    <button id="btnPlay" onclick="togglePlay()" class="w-10 h-10 rounded-full flex items-center justify-center bg-gray-700 hover:bg-gray-600">▶</button>
-    <div id="timeCur" class="time-disp text-right">0:00</div>
-    <input type="range" id="scrubber" min="0" max="1000" value="0">
-    <div id="timeMax" class="time-disp">0:00</div>
-    <button id="btnSpeed" onclick="cycleSpeed()" class="bg-gray-800 text-xs font-bold rounded px-2 py-1 w-12 text-center">1x</button>
-  </div>
-
-  <!-- Loader -->
-  <div id="loader">
-    <div class="spinner"></div>
-    <div id="loaderText" class="text-xl font-bold tracking-wide">Downloading Telemetry...</div>
-  </div>
-
-  <!-- Insights Modal -->
-  <div id="insightsModal">
-    <div class="modal-header">
-      <h2><span id="insIndicator" style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#e10600;"></span> Insights: <span id="insDriver">Select a Driver</span></h2>
-      <button class="close-btn" onclick="document.getElementById('insightsModal').style.display='none'">×</button>
-    </div>
-    <div id="selectedSummary"></div>
-    <div class="chart-container">
-      <canvas id="insightChart"></canvas>
-    </div>
+    <footer class="controls">
+      <button id="playBtn">Play</button>
+      <button id="backBtn">-15s</button>
+      <input id="scrubber" type="range" min="0" max="1000" value="0" aria-label="Replay position">
+      <button id="forwardBtn">+15s</button>
+      <button id="speedBtn">1x</button>
+      <div class="time"><span id="timeNow">0:00</span> / <span id="timeMax">0:00</span></div>
+    </footer>
   </div>
 
   <script>
-    // Constants & Globals
     const teamColors = {
-      "VER": "#3671C6", "PER": "#3671C6",
-      "LEC": "#E8002D", "SAI": "#E8002D", "HAM": "#E8002D",
-      "NOR": "#FF8000", "PIA": "#FF8000",
-      "RUS": "#27F4D2", "ANT": "#27F4D2",
-      "ALO": "#229971", "STR": "#229971",
-      "GAS": "#0093cc", "OCO": "#0093cc", "DOO": "#0093cc",
-      "ALB": "#64C4FF", "COL": "#64C4FF", "SAI": "#64C4FF",
-      "TSU": "#6692FF", "RIC": "#6692FF", "LAW": "#6692FF", "HAD": "#6692FF",
-      "BOT": "#52E252", "ZHO": "#52E252", "BOR": "#52E252",
-      "MAG": "#B6BABD", "HUL": "#B6BABD", "BEA": "#B6BABD", "OAC": "#B6BABD"
+      VER: "#3671C6", PER: "#3671C6", LEC: "#E8002D", SAI: "#E8002D", HAM: "#27F4D2",
+      NOR: "#FF8000", PIA: "#FF8000", RUS: "#27F4D2", ANT: "#27F4D2",
+      ALO: "#229971", STR: "#229971", GAS: "#0093cc", OCO: "#0093cc", DOO: "#0093cc",
+      ALB: "#64C4FF", COL: "#64C4FF", TSU: "#6692FF", RIC: "#6692FF", LAW: "#6692FF", HAD: "#6692FF",
+      BOT: "#52E252", ZHO: "#52E252", BOR: "#52E252", MAG: "#B6BABD", HUL: "#B6BABD", BEA: "#B6BABD", OAC: "#B6BABD"
+    };
+    const tyreLife = { S: 22, M: 38, H: 52, I: 28, W: 20, UNKNOWN: 35, "?": 35 };
+    const speeds = [0.5, 1, 2, 4, 8];
+
+    const ui = {
+      year: document.getElementById("yearSelect"),
+      race: document.getElementById("raceSelect"),
+      session: document.getElementById("sessionSelect"),
+      load: document.getElementById("loadBtn"),
+      status: document.getElementById("statusText"),
+      loader: document.getElementById("loader"),
+      loaderTitle: document.getElementById("loaderTitle"),
+      loaderText: document.getElementById("loaderText"),
+      leaderboard: document.getElementById("leaderboard"),
+      predictions: document.getElementById("predictions"),
+      details: document.getElementById("driverDetails"),
+      calls: document.getElementById("strategyCalls"),
+      lapHud: document.getElementById("lapHud"),
+      weatherHud: document.getElementById("weatherHud"),
+      selectedHud: document.getElementById("selectedHud"),
+      play: document.getElementById("playBtn"),
+      back: document.getElementById("backBtn"),
+      forward: document.getElementById("forwardBtn"),
+      speed: document.getElementById("speedBtn"),
+      scrubber: document.getElementById("scrubber"),
+      timeNow: document.getElementById("timeNow"),
+      timeMax: document.getElementById("timeMax")
+    };
+
+    const canvas = document.getElementById("trackCanvas");
+    const ctx = canvas.getContext("2d");
+    const telCanvas = document.getElementById("telemetryCanvas");
+    const telCtx = telCanvas.getContext("2d");
+
+    let data = null;
+    let currentTime = 0;
+    let playing = false;
+    let speedIndex = 1;
+    let lastTick = 0;
+    let selected = null;
+    let camera = { scale: 1, x: 0, y: 0 };
+    let trackBounds = null;
+    let progressCache = new Map();
+    let raf = null;
+
+    function setLoading(show, title, text) {
+      ui.loader.classList.toggle("show", show);
+      if (title) ui.loaderTitle.textContent = title;
+      if (text) ui.loaderText.textContent = text;
     }
-    const tyreLife = { S: 22, M: 38, H: 52, I: 28, W: 20, "?": 35 }
-    const pitLossSecs = 22
 
-    let replayData = null
-    let currentRealTime = 0
-    let playing = false
-    let lastTickTime = 0
-    let speeds = [0.5, 1, 2, 4]
-    let speedIdx = 1
-    let reqAnimFrame = null
-
-    // View state
-    let camera = { x: 0, y: 0, scale: 1 }
-    let isDragging = false
-    let dragStart = { x: 0, y: 0 }
-
-    // Logic state
-    let gapMode = 'I' // 'I' nterval or 'L' eader
-    let selectedDrivers = []
-    let chartInstance = null
-    
-    // UI Elements
-    const canvas = document.getElementById("replayCanvas")
-    const ctx = canvas.getContext("2d")
-    const scrubber = document.getElementById("scrubber")
-    let isScrubbing = false
-
-    // Initialize Canvas
-    function resize() {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
-      if (replayData && !playing) drawFrame()
+    function setStatus(text) {
+      ui.status.textContent = text;
     }
-    window.addEventListener('resize', resize)
-    resize()
 
-    // Setup Chart.js
-    Chart.defaults.color = "#9ca3af"
-    const cx = document.getElementById("insightChart").getContext("2d")
-    chartInstance = new Chart(cx, {
-      type: 'line',
-      data: { labels: [], datasets: [] },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        animation: false,
-        elements: { point: { radius: 0 }, line: { borderWidth: 2, tension: 0.1 } },
-        scales: {
-          x: { display: false },
-          y: { min: 0, max: 350, title: { display: true, text: 'Speed (km/h)' } },
-          y1: { position: 'right', min: 0, max: 100, title: { display: true, text: 'Throttle/Brake %' } }
-        },
-        plugins: { legend: { position: 'top' } }
+    function fmtTime(seconds) {
+      if (!Number.isFinite(seconds)) return "0:00";
+      const m = Math.floor(seconds / 60);
+      const s = String(Math.floor(seconds % 60)).padStart(2, "0");
+      return `${m}:${s}`;
+    }
+
+    function fmtLap(seconds) {
+      if (!Number.isFinite(Number(seconds))) return "--";
+      const m = Math.floor(seconds / 60);
+      const s = (seconds % 60).toFixed(3).padStart(6, "0");
+      return `${m}:${s}`;
+    }
+
+    function resizeCanvases() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = Math.max(320, Math.floor(rect.width * window.devicePixelRatio));
+      canvas.height = Math.max(320, Math.floor(rect.height * window.devicePixelRatio));
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+      const telRect = telCanvas.getBoundingClientRect();
+      telCanvas.width = Math.max(320, Math.floor(telRect.width * window.devicePixelRatio));
+      telCanvas.height = Math.max(160, Math.floor(telRect.height * window.devicePixelRatio));
+      fitTrack();
+      draw();
+    }
+
+    function fitTrack() {
+      if (!data || !data.track_x || !data.track_x.length) return;
+      const xs = data.track_x;
+      const ys = data.track_y;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (let i = 0; i < xs.length; i++) {
+        minX = Math.min(minX, xs[i]);
+        maxX = Math.max(maxX, xs[i]);
+        minY = Math.min(minY, ys[i]);
+        maxY = Math.max(maxY, ys[i]);
       }
-    })
-
-    // Keyboard controls
-    window.addEventListener('keydown', e => {
-      // Don't trigger if user is typing in an input (not that we have any, but good practice)
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return
-      
-      switch(e.key) {
-        case ' ':
-          e.preventDefault()
-          togglePlay()
-          break
-        case 'ArrowRight':
-          if (replayData) { currentRealTime = Math.min(replayData.t_max, currentRealTime + 5); drawFrame() }
-          break
-        case 'ArrowLeft':
-          if (replayData) { currentRealTime = Math.max(0, currentRealTime - 5); drawFrame() }
-          break
-        case '1': speedIdx = 0; applySpeed(); break
-        case '2': speedIdx = 1; applySpeed(); break
-        case '3': speedIdx = 2; applySpeed(); break
-        case '4': speedIdx = 3; applySpeed(); break
-      }
-    })
-
-    // Mouse / Touch Controls (Panning & Zoom)
-    canvas.addEventListener('mousedown', e => { isDragging = true; dragStart = { x: e.clientX - camera.x, y: e.clientY - camera.y } })
-    window.addEventListener('mouseup', () => isDragging = false)
-    window.addEventListener('mousemove', e => { if (isDragging) { camera.x = e.clientX - dragStart.x; camera.y = e.clientY - dragStart.y; if(!playing) drawFrame() } })
-    canvas.addEventListener('wheel', e => {
-      e.preventDefault()
-      const zoom = e.deltaY < 0 ? 1.1 : 0.9
-      const mouseX = e.clientX, mouseY = e.clientY
-      camera.x = mouseX - (mouseX - camera.x) * zoom
-      camera.y = mouseY - (mouseY - camera.y) * zoom
-      camera.scale *= zoom
-      if (!playing) drawFrame()
-    }, {passive: false})
-
-    // Scrubber
-    scrubber.addEventListener("mousedown", () => isScrubbing = true)
-    scrubber.addEventListener("touchstart", () => isScrubbing = true)
-    window.addEventListener("mouseup", () => { if(isScrubbing) { isScrubbing=false; lastTickTime=performance.now()} })
-    window.addEventListener("touchend", () => { if(isScrubbing) { isScrubbing=false; lastTickTime=performance.now()} })
-    scrubber.addEventListener("input", e => {
-      if(!replayData) return
-      currentRealTime = (e.target.value / 1000) * replayData.t_max
-      drawFrame()
-    })
-
-    // Actions
-    function togglePlay() {
-      playing = !playing
-      document.getElementById("btnPlay").textContent = playing ? "⏸" : "▶"
-      if (playing) {
-        lastTickTime = performance.now()
-        reqAnimFrame = requestAnimationFrame(tick)
-      } else {
-        cancelAnimationFrame(reqAnimFrame)
-      }
+      trackBounds = { minX, maxX, minY, maxY };
+      const pad = 100;
+      const w = canvas.width;
+      const h = canvas.height;
+      const scale = Math.min(w / ((maxX - minX) + pad * 2), h / ((maxY - minY) + pad * 2));
+      camera.scale = scale;
+      camera.x = w / 2 - ((minX + maxX) / 2) * scale;
+      camera.y = h / 2 + ((minY + maxY) / 2) * scale;
+      progressCache = new Map();
     }
 
-    function cycleSpeed() {
-      speedIdx = (speedIdx + 1) % speeds.length
-      applySpeed()
-    }
-    
-    function applySpeed() {
-      let spd = speeds[speedIdx]
-      document.getElementById("btnSpeed").textContent = spd + "x"
-    }
-
-    function formatTime(secs) {
-      if (isNaN(secs)) return "0:00"
-      const m = Math.floor(secs / 60)
-      const s = Math.floor(secs % 60).toString().padStart(2, '0')
-      return `${m}:${s}`
-    }
-
-    function formatLapTime(secs) {
-      if (secs == null || Number.isNaN(Number(secs))) return "--"
-      const m = Math.floor(secs / 60)
-      const s = (secs % 60).toFixed(3).padStart(6, "0")
-      return `${m}:${s}`
-    }
-
-    function getAnalysisDriver(code) {
-      return replayData?.race_analysis?.drivers?.find(d => d.code === code) || null
-    }
-
-    function renderRaceIntel() {
-      const panel = document.getElementById("raceIntelPanel")
-      const list = document.getElementById("predictionList")
-      if (!panel || !list || !replayData) return
-      panel.style.display = "flex"
-      const predictions = replayData.race_analysis?.predictions || []
-      list.innerHTML = predictions.length
-        ? predictions.slice(0, 5).map(p => {
-            const col = teamColors[p.code] || "#ddd"
-            return `<div class="prediction-row">
-              <div class="prediction-code" style="color:${col}">${p.code}</div>
-              <div class="prediction-reason" title="${p.reason}">${p.reason}</div>
-              <div class="prediction-chance">${p.win_chance}%</div>
-            </div>`
-          }).join("")
-        : `<div class="driver-meta">Prediction model will appear after replay analysis loads.</div>`
-    }
-
-    function renderSelectedDriverCard(state) {
-      const card = document.getElementById("selectedDriverCard")
-      if (!card) return
-      const code = selectedDrivers[0]
-      if (!code) {
-        card.innerHTML = `<div class="driver-meta">Select a driver on the leaderboard to inspect pace, consistency, tyres, and replay telemetry.</div>`
-        return
-      }
-      const current = state?.drivers?.find(d => d.code === code)
-      const analysis = getAnalysisDriver(code)
-      const lapInfo = getDriverLapInfo(code, currentRealTime)
-      const col = teamColors[code] || "#fff"
-      const trend = lapInfo.trend == null ? "--" : `${lapInfo.trend >= 0 ? "+" : ""}${lapInfo.trend.toFixed(2)}s`
-      const pos = current ? state.drivers.findIndex(d => d.code === code) + 1 : analysis?.finish_position || "--"
-      card.innerHTML = `
-        <div class="selected-name" style="color:${col}">${code}</div>
-        <div class="metric-grid">
-          <div class="metric"><div class="metric-label">Position</div><div class="metric-value">P${pos}</div></div>
-          <div class="metric"><div class="metric-label">Speed</div><div class="metric-value">${current ? Math.round(current.s) + " km/h" : "--"}</div></div>
-          <div class="metric"><div class="metric-label">Best lap</div><div class="metric-value">${formatLapTime(analysis?.best_lap)}</div></div>
-          <div class="metric"><div class="metric-label">Recent trend</div><div class="metric-value">${trend}</div></div>
-          <div class="metric"><div class="metric-label">Tyre</div><div class="metric-value">${current?.tyre || lapInfo.latest?.tyre || "--"}</div></div>
-          <div class="metric"><div class="metric-label">Consistency</div><div class="metric-value">${analysis?.consistency == null ? "--" : analysis.consistency.toFixed(2) + "s"}</div></div>
-        </div>`
-    }
-
-    function renderSelectedSummary(state) {
-      const box = document.getElementById("selectedSummary")
-      if (!box) return
-      const code = selectedDrivers[0]
-      const current = code ? state?.drivers?.find(d => d.code === code) : null
-      const analysis = code ? getAnalysisDriver(code) : null
-      const lapInfo = code ? getDriverLapInfo(code, currentRealTime) : null
-      if (!code || !current) {
-        box.innerHTML = `<div class="summary-box"><div class="summary-label">Driver</div><div class="summary-value">Select one</div></div>`
-        return
-      }
-      box.innerHTML = `
-        <div class="summary-box"><div class="summary-label">Speed</div><div class="summary-value">${Math.round(current.s)} km/h</div></div>
-        <div class="summary-box"><div class="summary-label">Throttle</div><div class="summary-value">${Math.round(current.t)}%</div></div>
-        <div class="summary-box"><div class="summary-label">Brake</div><div class="summary-value">${Math.round(current.b)}%</div></div>
-        <div class="summary-box"><div class="summary-label">Best lap</div><div class="summary-value">${formatLapTime(analysis?.best_lap)}</div></div>
-        <div class="summary-box"><div class="summary-label">Avg pace</div><div class="summary-value">${formatLapTime(analysis?.avg_pace)}</div></div>
-        <div class="summary-box"><div class="summary-label">Tyre age</div><div class="summary-value">${lapInfo?.age ?? "--"}</div></div>
-        <div class="summary-box"><div class="summary-label">Gear</div><div class="summary-value">${current.g ?? "--"}</div></div>
-        <div class="summary-box"><div class="summary-label">DRS</div><div class="summary-value">${((current.drs>=10 && current.drs<=14) || current.drs===8) ? "Open" : "Closed"}</div></div>`
-    }
-
-    function updateTelemetryChart(code) {
-      if (!code || !replayData?.frames?.length || chartInstance.canvas.offsetParent === null) return
-      const idx = Math.max(0, Math.min(replayData.frames.length - 1, Math.round(currentRealTime / replayData.frame_step)))
-      const start = Math.max(0, idx - 30)
-      const end = Math.min(replayData.frames.length - 1, idx + 10)
-      const labels = []
-      const speed = []
-      const throttle = []
-      const brake = []
-      for (let i = start; i <= end; i++) {
-        const frame = replayData.frames[i]
-        const d = frame.drivers.find(x => x.code === code)
-        if (!d) continue
-        labels.push(formatTime(frame.t))
-        speed.push(d.s)
-        throttle.push(d.t)
-        brake.push(d.b)
-      }
-      chartInstance.data.labels = labels
-      chartInstance.data.datasets = [
-        { label: "Speed", data: speed, borderColor: teamColors[code] || "#fff", yAxisID: "y" },
-        { label: "Throttle", data: throttle, borderColor: "#22c55e", yAxisID: "y1" },
-        { label: "Brake", data: brake, borderColor: "#e10600", yAxisID: "y1" }
-      ]
-      chartInstance.update("none")
-    }
-
-    async function readReplayResponse(res) {
-      const text = await res.text()
-      let data = null
+    async function fetchReplay() {
+      const params = new URLSearchParams({
+        year: ui.year.value,
+        race: ui.race.value,
+        session: ui.session.value,
+        v: Date.now()
+      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000);
       try {
-        data = text ? JSON.parse(text) : {}
-      } catch (err) {
-        throw new Error("Replay server returned unreadable data.")
+        const response = await fetch(`/api/replay_data?${params}`, { signal: controller.signal });
+        const text = await response.text();
+        let payload;
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          throw new Error("The replay server returned unreadable data.");
+        }
+        if (!response.ok || payload.error) throw new Error(payload.error || `Replay request failed (${response.status})`);
+        if (!payload.frames || !payload.frames.length) throw new Error("No replay frames were returned for this session.");
+        return payload;
+      } finally {
+        clearTimeout(timeout);
       }
-      if (!res.ok || data.error) {
-        throw new Error(data.error || `Replay request failed (${res.status})`)
-      }
-      if (!Array.isArray(data.frames) || data.frames.length === 0) {
-        throw new Error("This replay has no usable frames. Try a different race or session.")
-      }
-      return data
     }
 
-    function getDriverLapInfo(code, now) {
-      const laps = replayData?.driver_laps?.[code] || []
-      const done = laps.filter(l => typeof l.t === "number" && l.t <= now && l.time)
-      const latest = done[done.length - 1] || null
-      const recent = done.slice(-4)
-      const prev = done.slice(-8, -4)
-      const recentAvg = recent.length ? recent.reduce((sum, l) => sum + l.time, 0) / recent.length : null
-      const prevAvg = prev.length ? prev.reduce((sum, l) => sum + l.time, 0) / prev.length : null
+    async function loadReplay() {
+      stop();
+      setLoading(true, "Loading replay", "Reading timing, position, car, tyre, weather, and lap analysis data.");
+      setStatus("Loading...");
+      ui.load.disabled = true;
+      try {
+        data = await fetchReplay();
+        currentTime = 0;
+        selected = data.frames[0]?.drivers?.[0]?.code || null;
+        fitTrack();
+        renderStaticPanels();
+        update();
+        setLoading(false);
+        setStatus(`${data.year} ${data.race} loaded`);
+        play();
+      } catch (err) {
+        data = null;
+        setLoading(true, "Replay failed to load", err.message || "Unknown error");
+        setStatus("Load failed");
+        renderEmpty();
+      } finally {
+        ui.load.disabled = false;
+      }
+    }
+
+    function renderStaticPanels() {
+      renderPredictions();
+      renderLeaderboard();
+      renderDetails(null);
+      renderStrategy(null);
+      ui.timeMax.textContent = fmtTime(data.t_max || 0);
+    }
+
+    function renderEmpty() {
+      ui.leaderboard.innerHTML = "";
+      ui.predictions.innerHTML = "";
+      ui.details.innerHTML = "";
+      ui.calls.innerHTML = "";
+      clearCanvas(ctx, canvas);
+      clearCanvas(telCtx, telCanvas);
+    }
+
+    function play() {
+      if (!data || playing) return;
+      playing = true;
+      ui.play.textContent = "Pause";
+      lastTick = performance.now();
+      raf = requestAnimationFrame(tick);
+    }
+
+    function stop() {
+      playing = false;
+      ui.play.textContent = "Play";
+      if (raf) cancelAnimationFrame(raf);
+      raf = null;
+    }
+
+    function tick(now) {
+      if (!playing || !data) return;
+      const dt = Math.min(0.25, (now - lastTick) / 1000);
+      lastTick = now;
+      currentTime += dt * speeds[speedIndex];
+      if (currentTime >= data.t_max) {
+        currentTime = data.t_max;
+        stop();
+      }
+      update();
+      if (playing) raf = requestAnimationFrame(tick);
+    }
+
+    function update() {
+      if (!data) return;
+      const state = getState();
+      renderLeaderboard(state);
+      renderDetails(state);
+      renderStrategy(state);
+      renderHud(state);
+      draw(state);
+      drawTelemetry(state);
+      ui.scrubber.value = data.t_max ? String((currentTime / data.t_max) * 1000) : "0";
+      ui.timeNow.textContent = fmtTime(currentTime);
+    }
+
+    function getState() {
+      const step = data.frame_step || 1;
+      const maxIndex = data.frames.length - 1;
+      const pos = Math.max(0, Math.min(maxIndex, currentTime / step));
+      const i0 = Math.floor(pos);
+      const i1 = Math.min(maxIndex, i0 + 1);
+      const frac = pos - i0;
+      const f0 = data.frames[i0];
+      const f1 = data.frames[i1];
+      const next = new Map(f1.drivers.map(d => [d.code, d]));
+      const drivers = f0.drivers.map(d0 => {
+        const d1 = next.get(d0.code) || d0;
+        const d = {
+          code: d0.code,
+          x: lerp(d0.x, d1.x, frac),
+          y: lerp(d0.y, d1.y, frac),
+          speed: lerp(d0.s, d1.s, frac),
+          throttle: lerp(d0.t, d1.t, frac),
+          brake: lerp(d0.b, d1.b, frac),
+          gear: frac < 0.5 ? d0.g : d1.g,
+          distance: lerp(d0.d, d1.d, frac),
+          lap: frac < 0.5 ? d0.lap : d1.lap,
+          tyre: d1.tyre || d0.tyre || "?",
+          drs: frac < 0.5 ? d0.drs : d1.drs
+        };
+        d.progress = d.lap + progressFor(d);
+        return d;
+      }).sort((a, b) => b.progress - a.progress);
+      for (let i = 0; i < drivers.length; i++) {
+        const d = drivers[i];
+        d.position = i + 1;
+        d.gapLeader = i === 0 ? 0 : Math.max(0, (drivers[0].progress - d.progress) * 85);
+        d.gapAhead = i === 0 ? 0 : Math.max(0, (drivers[i - 1].progress - d.progress) * 85);
+      }
+      return { drivers, weather: f0.weather || null, sc: f0.sc || null };
+    }
+
+    function lerp(a, b, f) {
+      return Number(a || 0) + (Number(b || 0) - Number(a || 0)) * f;
+    }
+
+    function progressFor(driver) {
+      if (!data.track_x || !data.track_x.length) return 0;
+      const key = `${driver.code}:${Math.round(currentTime)}`;
+      if (progressCache.has(key)) return progressCache.get(key);
+      let best = 0;
+      let bestDist = Infinity;
+      const xs = data.track_x, ys = data.track_y;
+      const stride = xs.length > 1200 ? 2 : 1;
+      for (let i = 0; i < xs.length; i += stride) {
+        const dx = driver.x - xs[i];
+        const dy = driver.y - ys[i];
+        const ds = dx * dx + dy * dy;
+        if (ds < bestDist) {
+          bestDist = ds;
+          best = i;
+        }
+      }
+      const p = best / xs.length;
+      progressCache.set(key, p);
+      return p;
+    }
+
+    function analysisFor(code) {
+      return data?.race_analysis?.drivers?.find(d => d.code === code) || null;
+    }
+
+    function lapInfoFor(code) {
+      const laps = data?.driver_laps?.[code] || [];
+      const done = laps.filter(l => Number(l.t) <= currentTime && Number(l.time) > 0);
+      const latest = done[done.length - 1] || null;
+      const recent = done.slice(-4);
+      const prev = done.slice(-8, -4);
+      const avg = rows => rows.length ? rows.reduce((sum, l) => sum + Number(l.time), 0) / rows.length : null;
+      const recentAvg = avg(recent);
+      const prevAvg = avg(prev);
       return {
         latest,
         recentAvg,
-        prevAvg,
-        trend: recentAvg != null && prevAvg != null ? recentAvg - prevAvg : null,
-        age: latest?.age ?? null,
-        stint: latest?.stint ?? null
+        trend: recentAvg != null && prevAvg != null ? recentAvg - prevAvg : null
+      };
+    }
+
+    function renderPredictions() {
+      const rows = data?.race_analysis?.predictions || [];
+      ui.predictions.innerHTML = rows.length ? rows.slice(0, 6).map(row => {
+        const color = teamColors[row.code] || "#f6f7fb";
+        return `<div class="prediction-row">
+          <div class="code" style="color:${color}">${row.code}</div>
+          <div class="muted small" title="${escapeHtml(row.reason)}">${escapeHtml(row.reason)}</div>
+          <div class="chance">${row.win_chance}%</div>
+        </div>`;
+      }).join("") : `<div class="muted small">No prediction data in this replay yet.</div>`;
+    }
+
+    function renderLeaderboard(state) {
+      if (!data) return;
+      const drivers = state?.drivers || data.frames[0]?.drivers?.map((d, i) => ({
+        code: d.code, position: i + 1, gapAhead: 0, lap: d.lap, tyre: d.tyre
+      })) || [];
+      ui.leaderboard.innerHTML = drivers.map(d => {
+        const color = teamColors[d.code] || "#f6f7fb";
+        const gap = d.position === 1 ? "Leader" : `+${d.gapAhead.toFixed(1)}`;
+        return `<div class="leader-row ${selected === d.code ? "selected" : ""}" data-code="${d.code}">
+          <div class="pos">P${d.position}</div>
+          <div class="code" style="color:${color}">${d.code}</div>
+          <div class="gap">${gap}</div>
+          <div class="tyre tyre-${d.tyre || "UNKNOWN"}">${d.tyre || "?"}</div>
+          <div class="lap">L${d.lap || "--"}</div>
+        </div>`;
+      }).join("");
+      ui.leaderboard.querySelectorAll(".leader-row").forEach(row => {
+        row.addEventListener("click", () => {
+          selected = row.dataset.code;
+          update();
+        });
+      });
+    }
+
+    function renderDetails(state) {
+      if (!data) return;
+      const current = state?.drivers?.find(d => d.code === selected) || null;
+      const analysis = selected ? analysisFor(selected) : null;
+      const info = selected ? lapInfoFor(selected) : null;
+      if (!selected) {
+        ui.details.innerHTML = `<div class="muted small">Select a driver to inspect replay telemetry.</div>`;
+        return;
       }
+      const color = teamColors[selected] || "#f6f7fb";
+      const trend = info?.trend == null ? "--" : `${info.trend >= 0 ? "+" : ""}${info.trend.toFixed(2)}s`;
+      ui.details.innerHTML = `<div class="card">
+        <div class="card-title"><span style="color:${color}">${selected}</span><span>${current ? "P" + current.position : "P--"}</span></div>
+        <div class="metric-grid">
+          <div class="metric"><div class="metric-label">Speed</div><div class="metric-value">${current ? Math.round(current.speed) + " km/h" : "--"}</div></div>
+          <div class="metric"><div class="metric-label">Throttle</div><div class="metric-value">${current ? Math.round(current.throttle) + "%" : "--"}</div></div>
+          <div class="metric"><div class="metric-label">Brake</div><div class="metric-value">${current ? Math.round(current.brake) + "%" : "--"}</div></div>
+          <div class="metric"><div class="metric-label">Gear</div><div class="metric-value">${current?.gear ?? "--"}</div></div>
+          <div class="metric"><div class="metric-label">Best lap</div><div class="metric-value">${fmtLap(analysis?.best_lap)}</div></div>
+          <div class="metric"><div class="metric-label">Avg pace</div><div class="metric-value">${fmtLap(analysis?.avg_pace)}</div></div>
+          <div class="metric"><div class="metric-label">Consistency</div><div class="metric-value">${analysis?.consistency == null ? "--" : analysis.consistency.toFixed(2) + "s"}</div></div>
+          <div class="metric"><div class="metric-label">Recent trend</div><div class="metric-value">${trend}</div></div>
+        </div>
+      </div>`;
     }
 
-    function makeCall(driver, title, kind, body, meta, score) {
-      return { driver, title, kind, body, meta, score }
-    }
-
-    function generateStrategyCalls(state) {
-      if (!replayData || !state?.drivers?.length) return []
-      const rain = state.weather && Number(state.weather.rainfall) > 0
-      const calls = []
+    function renderStrategy(state) {
+      if (!data || !state?.drivers?.length) {
+        ui.calls.innerHTML = `<div class="muted small">Strategy calls appear once replay frames are running.</div>`;
+        return;
+      }
+      const calls = [];
+      const rain = state.weather && Number(state.weather.rainfall) > 0;
       state.drivers.forEach((d, i) => {
-        const ahead = i > 0 ? state.drivers[i - 1] : null
-        const behind = i < state.drivers.length - 1 ? state.drivers[i + 1] : null
-        const lapInfo = getDriverLapInfo(d.code, currentRealTime)
-        const tyre = d.tyre || "?"
-        const life = tyreLife[tyre] || 35
-        const age = lapInfo.age ?? Math.max(0, Math.round(d.d / 5000))
-        const usedPct = age / life
-        const trend = lapInfo.trend
-        const closingAhead = ahead && trend != null && getDriverLapInfo(ahead.code, currentRealTime).trend != null
-          ? getDriverLapInfo(ahead.code, currentRealTime).trend - trend
-          : null
-
-        if (rain && tyre !== "I" && tyre !== "W") {
-          calls.push(makeCall(d.code, "Box for wet tyre", "risk", "Rain is reported while this car is still on slicks.", `${tyre} tyre, lap ${d.lap}`, 95))
-          return
+        const info = lapInfoFor(d.code);
+        const age = Number(info.latest?.age || Math.max(0, Math.round(d.distance / 5000)));
+        const life = tyreLife[d.tyre] || 35;
+        const ahead = i > 0 ? state.drivers[i - 1] : null;
+        const behind = i < state.drivers.length - 1 ? state.drivers[i + 1] : null;
+        if (rain && d.tyre !== "I" && d.tyre !== "W") {
+          calls.push({ code: d.code, kind: "risk", title: "Box for wet tyre", text: "Rain is reported while this car is on slick tyres." });
+        } else if (age / life > 1.02) {
+          calls.push({ code: d.code, kind: "risk", title: "Pit now", text: `${age}/${life} laps on ${d.tyre}. Tyre is past its normal window.` });
+        } else if (age / life > 0.78) {
+          calls.push({ code: d.code, kind: "call", title: "Prepare stop", text: `${age}/${life} laps on ${d.tyre}. Pit window is open.` });
         }
-
-        if (usedPct >= 1.05) {
-          calls.push(makeCall(d.code, "Pit now", "risk", "Tyre age is past the normal life window, so position loss risk grows every lap.", `${age}/${life} laps on ${tyre}`, 85 + Math.min(10, (usedPct - 1) * 20)))
-        } else if (usedPct >= 0.78) {
-          calls.push(makeCall(d.code, "Prepare stop", "watch", "Pit window is open. Watch for traffic before committing.", `${age}/${life} laps on ${tyre}`, 62 + usedPct * 10))
+        if (ahead && d.gapAhead > 0 && d.gapAhead < 3.0) {
+          calls.push({ code: d.code, kind: "attack", title: "Attack or undercut", text: `${ahead.code} is ${d.gapAhead.toFixed(1)}s ahead.` });
         }
-
-        if (ahead && d.gapI > 0 && d.gapI < 3.5 && (trend == null || trend < 0.25)) {
-          const gain = closingAhead != null ? `, pace swing ${closingAhead.toFixed(2)}s/lap` : ""
-          calls.push(makeCall(d.code, "Undercut threat", "priority", `Close enough to pressure ${ahead.code}. A clean stop can attack track position.`, `Gap ${d.gapI.toFixed(1)}s${gain}`, 78 - d.gapI * 4))
+        if (behind && behind.gapAhead > 0 && behind.gapAhead < 2.0) {
+          calls.push({ code: d.code, kind: "call", title: "Defend", text: `${behind.code} is within ${behind.gapAhead.toFixed(1)}s.` });
         }
-
-        if (behind && behind.gapI > 0 && behind.gapI < 2.5) {
-          calls.push(makeCall(d.code, "Defend position", "watch", `${behind.code} is inside attack range. Cover if the pit window is open.`, `Behind +${behind.gapI.toFixed(1)}s`, 70 - behind.gapI * 5))
-        }
-
-        if (ahead && d.gapI > 8 && d.gapI < pitLossSecs && trend != null && trend < -0.05 && usedPct < 0.85) {
-          calls.push(makeCall(d.code, "Stay out", "priority", "Current pace is improving and the car is outside immediate undercut range.", `Gap ahead ${d.gapI.toFixed(1)}s`, 58))
-        }
-      })
-      if (!calls.length) {
-        calls.push(makeCall("--", "Hold plan", "watch", "No urgent pit or attack signal at this timestamp.", "Keep watching gaps and tyre age", 1))
-      }
-      return calls.sort((a, b) => b.score - a.score).slice(0, 5)
+      });
+      const visible = calls.length ? calls.slice(0, 5) : [{ code: "--", kind: "call", title: "Hold plan", text: "No urgent attack, pit, or weather call at this timestamp." }];
+      ui.calls.innerHTML = visible.map(call => {
+        const color = teamColors[call.code] || "#f6f7fb";
+        return `<div class="card call ${call.kind}">
+          <div class="card-title"><span style="color:${color}">${call.code} - ${escapeHtml(call.title)}</span></div>
+          <div class="muted small">${escapeHtml(call.text)}</div>
+        </div>`;
+      }).join("");
     }
 
-    function updateStrategyPanel(state) {
-      const panel = document.getElementById("strategyPanel")
-      const list = document.getElementById("strategyCalls")
-      if (!panel || !list || !state) return
-      panel.style.display = "flex"
-      const leaderLap = state.drivers[0]?.lap || 1
-      document.getElementById("strategyLap").textContent = `Lap ${leaderLap} / ${replayData.total_laps || "--"}`
-      list.innerHTML = generateStrategyCalls(state).map(call => {
-        const col = teamColors[call.driver] || "#ddd"
-        const tagBg = call.kind === "priority" ? "#86efac" : call.kind === "risk" ? "#fca5a5" : "#fcd34d"
-        return `<div class="call-card ${call.kind}">
-          <div class="call-top">
-            <div class="call-driver" style="color:${col}">${call.driver} · ${call.title}</div>
-            <div class="call-tag" style="background:${tagBg}">${call.kind}</div>
-          </div>
-          <div class="call-body">${call.body}</div>
-          <div class="call-meta">${call.meta}</div>
-        </div>`
-      }).join("")
-    }
-
-    function setGapMode(mode) {
-      gapMode = mode
-      document.getElementById('togI').className = `lb-toggle ${mode==='I'?'active':''}`
-      document.getElementById('togL').className = `lb-toggle ${mode==='L'?'active':''}`
-      if(!playing) drawFrame()
-    }
-
-    function toggleDriver(code) {
-      if (selectedDrivers.includes(code)) {
-        selectedDrivers = selectedDrivers.filter(c => c !== code)
-      } else {
-        selectedDrivers = [code] // single select for now
-      }
-      
-      // Update Modal Header
-      if (selectedDrivers.length > 0) {
-        document.getElementById("insDriver").textContent = code
-        document.getElementById("insIndicator").style.background = teamColors[code] || '#fff'
-      } else {
-        document.getElementById("insDriver").textContent = "Select a Driver"
-        document.getElementById("insIndicator").style.background = '#e10600'
-      }
-      
-      if(!playing) drawFrame()
-    }
-
-    // MAIN LOAD FUNCTION
-    async function loadReplay() {
-      const year = document.getElementById("selYear").value
-      const race = document.getElementById("selRace").value
-      const sess = document.getElementById("selSession").value
-
-      document.getElementById("loader").style.display = "flex"
-      document.getElementById("raceIntelPanel").style.display = "none"
-      document.getElementById("weatherPanel").style.display = "none"
-      document.getElementById("strategyPanel").style.display = "none"
-      document.getElementById("leaderboardPanel").style.display = "none"
-      document.getElementById("playbackPanel").style.display = "none"
-      document.getElementById("loaderText").textContent = "Downloading Telemetry..."
-      playing = false
-      if (reqAnimFrame) cancelAnimationFrame(reqAnimFrame)
-
-      try {
-        const res = await fetch(`/api/replay_data?year=${year}&race=${encodeURIComponent(race)}&session=${sess}&v=${Date.now()}`)
-        const data = await readReplayResponse(res)
-        
-        replayData = data
-        currentRealTime = 0
-        speedIdx = 1; applySpeed()
-        selectedDrivers = []
-        renderRaceIntel()
-        
-        // Auto center track
-        let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity
-        if(data.track_x && data.track_x.length > 0) {
-          data.track_x.forEach((x,i)=>{
-            let y = data.track_y[i]
-            if(x<minX) minX=x; if(x>maxX) maxX=x;
-            if(y<minY) minY=y; if(y>maxY) maxY=y;
-          })
-          const pad = 100
-          const tw = (maxX - minX) + pad*2
-          const th = (maxY - minY) + pad*2
-          const scale = Math.min(window.innerWidth/tw, window.innerHeight/th) * 0.9
-          camera = {
-            scale: scale,
-            x: window.innerWidth/2 - ((minX+maxX)/2)*scale,
-            y: window.innerHeight/2 + ((minY+maxY)/2)*scale
-          }
-        }
-
-        // Create persistent DOM rows for the Leaderboard
-        let lbHtml = ""
-        // Get all unique driver codes from the first few frames
-        let cSet = new Set()
-        for(let i=0; i<Math.min(10, data.frames.length); i++){
-          data.frames[i].drivers.forEach(d => cSet.add(d.code))
-        }
-        Array.from(cSet).forEach(code => {
-          let col = teamColors[code] || '#888'
-          lbHtml += `
-            <div id="lb-row-${code}" class="lb-row" onclick="toggleDriver('${code}')">
-              <div id="lb-pos-${code}" class="lb-pos">-</div>
-              <div class="lb-code" style="color:${col}">${code}</div>
-              <div id="lb-gap-${code}" class="lb-gap"></div>
-              <div id="lb-drs-${code}" class="lb-drs"></div>
-              <div class="lb-tyre-wrapper">
-                <div class="lb-tyre lb-tyre-bg" id="lb-tyre-bg-${code}"></div>
-                <div class="lb-tyre lb-tyre-fg" id="lb-tyre-fg-${code}"></div>
-              </div>
-              <div id="lb-age-${code}" class="lb-age">0</div>
-            </div>`
-        })
-        document.getElementById("lbContent").innerHTML = lbHtml
-
-        document.getElementById("loader").style.display = "none"
-        document.getElementById("playbackPanel").style.display = "flex"
-        document.getElementById("leaderboardPanel").style.display = "flex"
-        document.getElementById("weatherPanel").style.display = "block"
-        document.getElementById("strategyPanel").style.display = "flex"
-        document.getElementById("raceIntelPanel").style.display = "flex"
-        
-        togglePlay() // start playing
-      } catch (e) {
-        document.getElementById("loaderText").textContent = "Error: " + e.message
-        setTimeout(() => document.getElementById("loader").style.display="none", 3000)
-      }
-    }
-
-    // MAIN INTERPOLATION FUNCTION
-    function getInterpolatedState() {
-      if (!replayData) return null
-      
-      const idxF = currentRealTime / replayData.frame_step
-      const i0 = Math.floor(idxF)
-      const i1 = Math.min(i0 + 1, replayData.frames.length - 1)
-      const frac = idxF - i0
-      
-      const f0 = replayData.frames[i0]
-      const f1 = replayData.frames[i1]
-      
-      let state = {
-        drivers: [],
-        sc: null,
-        weather: f0.weather || null
-      }
-
-      // Interpolate Drivers
-      let d1Map = {}
-      f1.drivers.forEach(d => d1Map[d.code] = d)
-      
-      f0.drivers.forEach(d0 => {
-        let d1 = d1Map[d0.code] || d0
-        state.drivers.push({
-          code: d0.code,
-          x: d0.x + (d1.x - d0.x)*frac,
-          y: d0.y + (d1.y - d0.y)*frac,
-          s: d0.s + (d1.s - d0.s)*frac,
-          t: d0.t + (d1.t - d0.t)*frac,
-          b: d0.b + (d1.b - d0.b)*frac,
-          g: frac < 0.5 ? d0.g : d1.g, // round to nearest
-          d: d0.d + (d1.d - d0.d)*frac,
-          lap: frac < 0.5 ? d0.lap : d1.lap,
-          tyre: d1.tyre, // don't interpolate tyre string
-          drs: frac < 0.5 ? d0.drs : d1.drs
-        })
-      })
-
-      // Interpolate Safety Car
-      if (f0.sc) {
-        if (f1.sc) {
-          state.sc = {
-            x: f0.sc.x + (f1.sc.x - f0.sc.x)*frac,
-            y: f0.sc.y + (f1.sc.y - f0.sc.y)*frac,
-            phase: frac < 0.5 ? f0.sc.phase : f1.sc.phase,
-            alpha: f0.sc.alpha + (f1.sc.alpha - f0.sc.alpha)*frac
-          }
-        } else {
-          state.sc = f0.sc
-        }
-      }
-
-      // Exact Track Geometric Sorting
-      if (replayData.track_x && replayData.track_x.length > 0) {
-        const tx = replayData.track_x; const ty = replayData.track_y; const n = tx.length;
-        state.drivers.forEach(d => {
-          let minDistSq = Infinity; let bestIdx = 0;
-          for (let i=0; i<n; i++) {
-            const dx = d.x - tx[i], dy = d.y - ty[i], distSq = dx*dx + dy*dy;
-            if (distSq < minDistSq) { minDistSq = distSq; bestIdx = i;}
-          }
-          d.trackProg = bestIdx / n
-        })
-      } else {
-        state.drivers.forEach(d => d.trackProg = 0)
-      }
-
-      // Sort Leaderboard strictly by Lap + TrackProgression
-      state.drivers.sort((a,b) => (b.lap + b.trackProg) - (a.lap + a.trackProg))
-
-      // Compute Gaps (Seconds = dist_m / 55.56 approximate)
-      if (state.drivers.length > 0) {
-        const trackSamples = replayData.track_x?.length || 1000
-        let refL = state.drivers[0]
-        let L_prog = refL.lap + refL.trackProg
-        for(let i=0; i<state.drivers.length; i++){
-          let d = state.drivers[i]
-          let prog = d.lap + d.trackProg
-          let rawGapToLeader = (L_prog - prog) * (trackSamples / 10) // approximate meters
-          d.gapL = rawGapToLeader / 55.56
-          
-          if (i === 0) {
-            d.gapI = 0
-          } else {
-            let prev = state.drivers[i-1]
-            let p_prog = prev.lap + prev.trackProg
-            let rawGapToInt = (p_prog - prog) * (trackSamples / 10)
-            d.gapI = rawGapToInt / 55.56
-          }
-        }
-      }
-
-      return state
-    }
-
-    function tick(time) {
-      if (!playing) return
-      const dt = time - lastTickTime
-      lastTickTime = time
-      const s_rt = speeds[speedIdx]
-      currentRealTime += (dt / 1000) * s_rt
-      
-      if (currentRealTime >= replayData.t_max) {
-        currentRealTime = replayData.t_max
-        playing = false
-        document.getElementById("btnPlay").textContent = "▶"
-      }
-      
-      drawFrame()
-      if (playing && !isScrubbing) reqAnimFrame = requestAnimationFrame(tick)
-    }
-
-    function drawFrame() {
-      if (!replayData) return
-      
-      ctx.clearRect(0,0, canvas.width, canvas.height)
-      ctx.save()
-      ctx.translate(camera.x, camera.y)
-      ctx.scale(camera.scale, -camera.scale)
-      
-      // Draw Track
-      if (replayData.track_x) {
-        ctx.beginPath()
-        for(let i=0; i<replayData.track_x.length; i++) {
-          let x = replayData.track_x[i], y = replayData.track_y[i]
-          if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-        }
-        ctx.strokeStyle = "rgba(40,40,40,0.8)"
-        ctx.lineWidth = 14 / camera.scale
-        ctx.lineJoin = 'round'; ctx.lineCap = 'round'
-        ctx.stroke()
-        
-        ctx.strokeStyle = "#ffffff"
-        ctx.lineWidth = 1 / camera.scale
-        ctx.stroke()
-      }
-
-      // Obtain interpolated frame
-      const state = getInterpolatedState()
-      if (!state) { ctx.restore(); return }
-
-      // Draw Safety Car
-      if (state.sc) {
-        const sc = state.sc
-        ctx.beginPath()
-        ctx.arc(sc.x, sc.y, 8/camera.scale, 0, Math.PI*2)
-        ctx.fillStyle = `rgba(255, 165, 0, ${sc.alpha})`
-        ctx.fill()
-        ctx.lineWidth = 2/camera.scale
-        ctx.strokeStyle = `rgba(255, 200, 0, ${sc.alpha})`
-        ctx.stroke()
-        
-        ctx.save()
-        ctx.scale(1, -1) // Unflip text
-        ctx.font = `${10/camera.scale}px Inter`
-        ctx.fillStyle = `rgba(255,255,255,${sc.alpha})`
-        ctx.fillText(sc.phase === 'deploying' ? "SC DEPLOY" : "SC", sc.x, -sc.y - 12/camera.scale)
-        ctx.restore()
-      }
-
-      // Draw Drivers
-      state.drivers.forEach(d => {
-        let col = teamColors[d.code] || '#fff'
-        let r = selectedDrivers.includes(d.code) ? 8 : 5
-        
-        ctx.beginPath()
-        ctx.arc(d.x, d.y, r/camera.scale, 0, Math.PI*2)
-        ctx.fillStyle = col
-        ctx.fill()
-        
-        if (selectedDrivers.includes(d.code)) {
-          ctx.strokeStyle = '#fff'
-          ctx.lineWidth = 2/camera.scale
-          ctx.stroke()
-        }
-
-        ctx.save()
-        ctx.scale(1, -1)
-        ctx.font = `bold ${10/camera.scale}px Inter`
-        ctx.fillStyle = col
-        ctx.fillText(d.code, d.x + 8/camera.scale, -d.y)
-        ctx.restore()
-      })
-      
-      ctx.restore()
-
-      // Update Weather
+    function renderHud(state) {
+      const leader = state.drivers[0];
+      ui.lapHud.textContent = leader ? `Lap ${leader.lap || "--"} / ${data.total_laps || "--"}` : "Lap --";
       if (state.weather) {
-        const w = state.weather
-        document.getElementById('wAir').textContent = w.air_temp.toFixed(1) + " °C"
-        document.getElementById('wTrk').textContent = w.track_temp.toFixed(1) + " °C"
-        document.getElementById('wHum').textContent = w.humidity.toFixed(0) + " %"
-        document.getElementById('wWnd').textContent = w.wind_speed.toFixed(1) + " km/h"
-        document.getElementById('wRin').textContent = w.rainfall > 0 ? "Yes" : "No"
-      }
-
-      // Update Scrubber
-      if (!isScrubbing) {
-        scrubber.value = (currentRealTime / replayData.t_max) * 1000
-      }
-      document.getElementById("timeCur").textContent = formatTime(currentRealTime)
-      document.getElementById("timeMax").textContent = formatTime(replayData.t_max)
-
-      // Update Leaderboard HTML (Using Flex Order avoiding redraws)
-      state.drivers.forEach((d, i) => {
-        let row = document.getElementById(`lb-row-${d.code}`)
-        if(row) {
-          row.style.order = i
-          
-          let isSel = selectedDrivers.includes(d.code)
-          row.className = `lb-row ${isSel?'selected':''}`
-          
-          document.getElementById(`lb-pos-${d.code}`).textContent = i + 1
-          
-          // Gap text
-          let gapTxt = ""
-          if (i === 0) { gapTxt = gapMode==='I' ? "-" : "Leader" }
-          else {
-            let val = gapMode==='I' ? d.gapI : d.gapL;
-            gapTxt = val > 0 ? `+${val.toFixed(1)}s` : ""
-          }
-          document.getElementById(`lb-gap-${d.code}`).textContent = gapTxt
-
-          // DRS
-          document.getElementById(`lb-drs-${d.code}`).className = `lb-drs ${((d.drs>=10 && d.drs<=14) || d.drs===8) ? 'active' : ''}`
-
-          // Tyre
-          let tBg = document.getElementById(`lb-tyre-bg-${d.code}`)
-          let tFg = document.getElementById(`lb-tyre-fg-${d.code}`)
-          tBg.textContent = d.tyre; tFg.textContent = d.tyre;
-          tBg.className = `lb-tyre lb-tyre-bg tyre-${d.tyre}`
-          tFg.className = `lb-tyre lb-tyre-fg tyre-${d.tyre}`
-          
-          // Tyre Age (mocking out of 30 laps for scale mask)
-          let age = Math.round(d.d / 5000) // approx laps old
-          document.getElementById(`lb-age-${d.code}`).textContent = age
-          let maskPct = Math.max(0, 100 - (age / 30)*100)
-          tFg.style.clipPath = `inset(${100-maskPct}% 0 0 0)`
-        }
-      })
-      if (state.drivers.length > 0) {
-        document.getElementById("lbLapCount").textContent = `${Math.max(1, state.drivers[0].lap)} / ${replayData.total_laps}`
-      }
-      updateStrategyPanel(state)
-      renderSelectedDriverCard(state)
-      renderSelectedSummary(state)
-
-      // Update Insights Chart
-      if (selectedDrivers.length > 0) {
-        updateTelemetryChart(selectedDrivers[0])
+        ui.weatherHud.textContent = `Air ${Number(state.weather.air_temp || 0).toFixed(1)} deg C, Track ${Number(state.weather.track_temp || 0).toFixed(1)} deg C`;
       } else {
-        chartInstance.data.labels = []
-        chartInstance.data.datasets = []
-        chartInstance.update('none')
+        ui.weatherHud.textContent = "Weather --";
       }
+      ui.selectedHud.textContent = selected || "Select a driver";
     }
+
+    function draw(state = null) {
+      clearCanvas(ctx, canvas);
+      if (!data) return;
+      state = state || getState();
+      ctx.save();
+      ctx.translate(camera.x, camera.y);
+      ctx.scale(camera.scale, -camera.scale);
+      drawTrack();
+      if (state.sc) drawSafetyCar(state.sc);
+      state.drivers.forEach(drawDriver);
+      ctx.restore();
+    }
+
+    function drawTrack() {
+      const xs = data.track_x || [];
+      const ys = data.track_y || [];
+      if (!xs.length) return;
+      ctx.beginPath();
+      for (let i = 0; i < xs.length; i++) {
+        if (i === 0) ctx.moveTo(xs[i], ys[i]);
+        else ctx.lineTo(xs[i], ys[i]);
+      }
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#2f3544";
+      ctx.lineWidth = 18 / camera.scale;
+      ctx.stroke();
+      ctx.strokeStyle = "#dfe5f2";
+      ctx.lineWidth = 2 / camera.scale;
+      ctx.stroke();
+    }
+
+    function drawDriver(d) {
+      const color = teamColors[d.code] || "#fff";
+      const r = selected === d.code ? 9 : 6;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r / camera.scale, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      if (selected === d.code) {
+        ctx.lineWidth = 3 / camera.scale;
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
+      }
+      ctx.save();
+      ctx.scale(1, -1);
+      ctx.font = `bold ${12 / camera.scale}px Arial`;
+      ctx.fillStyle = "#fff";
+      ctx.fillText(d.code, d.x + 10 / camera.scale, -d.y + 4 / camera.scale);
+      ctx.restore();
+    }
+
+    function drawSafetyCar(sc) {
+      ctx.beginPath();
+      ctx.arc(sc.x, sc.y, 9 / camera.scale, 0, Math.PI * 2);
+      ctx.fillStyle = "#f59e0b";
+      ctx.fill();
+    }
+
+    function drawTelemetry(state) {
+      clearCanvas(telCtx, telCanvas);
+      if (!data || !selected) return;
+      const index = Math.max(0, Math.min(data.frames.length - 1, Math.round(currentTime / (data.frame_step || 1))));
+      const start = Math.max(0, index - 35);
+      const end = Math.min(data.frames.length - 1, index + 8);
+      const points = [];
+      for (let i = start; i <= end; i++) {
+        const d = data.frames[i].drivers.find(row => row.code === selected);
+        if (d) points.push({ speed: d.s, throttle: d.t, brake: d.b });
+      }
+      if (!points.length) return;
+      const w = telCanvas.width, h = telCanvas.height;
+      telCtx.strokeStyle = "#252a38";
+      telCtx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        const y = (h / 4) * i;
+        telCtx.beginPath();
+        telCtx.moveTo(0, y);
+        telCtx.lineTo(w, y);
+        telCtx.stroke();
+      }
+      drawLine(points.map(p => p.speed), 0, 350, "#f6f7fb");
+      drawLine(points.map(p => p.throttle), 0, 100, "#22c55e");
+      drawLine(points.map(p => p.brake), 0, 100, "#ef4444");
+    }
+
+    function drawLine(values, min, max, color) {
+      const w = telCanvas.width, h = telCanvas.height;
+      telCtx.beginPath();
+      values.forEach((value, i) => {
+        const x = values.length === 1 ? 0 : (i / (values.length - 1)) * w;
+        const y = h - ((value - min) / (max - min)) * h;
+        if (i === 0) telCtx.moveTo(x, y);
+        else telCtx.lineTo(x, y);
+      });
+      telCtx.strokeStyle = color;
+      telCtx.lineWidth = 2;
+      telCtx.stroke();
+    }
+
+    function clearCanvas(context, target) {
+      context.clearRect(0, 0, target.width, target.height);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+    }
+
+    ui.load.addEventListener("click", loadReplay);
+    ui.play.addEventListener("click", () => playing ? stop() : play());
+    ui.back.addEventListener("click", () => { if (!data) return; currentTime = Math.max(0, currentTime - 15); update(); });
+    ui.forward.addEventListener("click", () => { if (!data) return; currentTime = Math.min(data.t_max, currentTime + 15); update(); });
+    ui.speed.addEventListener("click", () => {
+      speedIndex = (speedIndex + 1) % speeds.length;
+      ui.speed.textContent = `${speeds[speedIndex]}x`;
+    });
+    ui.scrubber.addEventListener("input", () => {
+      if (!data) return;
+      currentTime = (Number(ui.scrubber.value) / 1000) * data.t_max;
+      update();
+    });
+    window.addEventListener("resize", resizeCanvases);
+    window.addEventListener("keydown", event => {
+      if (event.target.tagName === "SELECT" || event.target.tagName === "INPUT") return;
+      if (event.key === " ") { event.preventDefault(); playing ? stop() : play(); }
+      if (event.key === "ArrowLeft" && data) { currentTime = Math.max(0, currentTime - 5); update(); }
+      if (event.key === "ArrowRight" && data) { currentTime = Math.min(data.t_max, currentTime + 5); update(); }
+    });
+
+    resizeCanvases();
+    loadReplay();
   </script>
 </body>
 </html>

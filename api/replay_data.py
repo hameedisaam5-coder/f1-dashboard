@@ -21,8 +21,18 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
-CACHE_DIR   = "/tmp/fastf1_cache"
-REPLAY_DIR  = "/tmp/replay_cache"
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+LOCAL_FASTF1_CACHE = os.path.join(PROJECT_ROOT, "cache")
+LOCAL_REPLAY_CACHE = os.path.join(LOCAL_FASTF1_CACHE, "replay_cache")
+
+CACHE_DIR = os.environ.get(
+    "FASTF1_CACHE_DIR",
+    LOCAL_FASTF1_CACHE if os.path.isdir(LOCAL_FASTF1_CACHE) else "/tmp/fastf1_cache",
+)
+REPLAY_DIR = os.environ.get(
+    "REPLAY_CACHE_DIR",
+    LOCAL_REPLAY_CACHE if os.path.isdir(LOCAL_FASTF1_CACHE) else "/tmp/replay_cache",
+)
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(REPLAY_DIR, exist_ok=True)
 fastf1.Cache.enable_cache(CACHE_DIR)
